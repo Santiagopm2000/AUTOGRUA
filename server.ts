@@ -15,6 +15,7 @@ db.exec(`
     id TEXT PRIMARY KEY,
     name TEXT,
     email TEXT,
+    phone TEXT,
     role TEXT,
     status TEXT DEFAULT 'TERMINE TURNO',
     status_start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -31,14 +32,24 @@ db.exec(`
   );
 `);
 
+// Migration: Add phone column if it doesn't exist
+try {
+  db.prepare("ALTER TABLE users ADD COLUMN phone TEXT").run();
+} catch (e) {
+  // Column already exists or other error
+}
+
 // Seed some data if empty
 const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
 if (userCount.count === 0) {
-  db.prepare("INSERT INTO users (id, name, email, role, status) VALUES (?, ?, ?, ?, ?)").run(
-    "driver-1", "Juan Perez", "juan@towassist.com", "driver", "TERMINE TURNO"
+  db.prepare("INSERT INTO users (id, name, email, phone, role, status) VALUES (?, ?, ?, ?, ?, ?)").run(
+    "driver-1", "Juan Perez", "juan@towassist.com", "+573001234567", "driver", "TERMINE TURNO"
   );
-  db.prepare("INSERT INTO users (id, name, email, role, status) VALUES (?, ?, ?, ?, ?)").run(
-    "admin-1", "Admin Central", "admin@towassist.com", "admin", "DISPONIBLE"
+  db.prepare("INSERT INTO users (id, name, email, phone, role, status) VALUES (?, ?, ?, ?, ?, ?)").run(
+    "admin-1", "Admin Central", "admin@towassist.com", "+573007654321", "admin", "DISPONIBLE"
+  );
+  db.prepare("INSERT INTO users (id, name, email, phone, role, status) VALUES (?, ?, ?, ?, ?, ?)").run(
+    "call-1", "Operador Call Center", "call@towassist.com", "+573009998877", "call_center", "DISPONIBLE"
   );
   
   db.prepare("INSERT INTO integrations (id, name, url, active) VALUES (?, ?, ?, ?)").run(
@@ -74,11 +85,16 @@ async function startServer() {
   });
 
   // User Management
+  app.get("/api/admin/users", (req, res) => {
+    const users = db.prepare("SELECT * FROM users").all();
+    res.json(users);
+  });
+
   app.post("/api/admin/users", (req, res) => {
-    const { name, email, role } = req.body;
+    const { name, email, phone, role } = req.body;
     const id = `user-${Date.now()}`;
-    db.prepare("INSERT INTO users (id, name, email, role) VALUES (?, ?, ?, ?)")
-      .run(id, name, email, role);
+    db.prepare("INSERT INTO users (id, name, email, phone, role) VALUES (?, ?, ?, ?, ?)")
+      .run(id, name, email, phone, role);
     res.json({ success: true, id });
   });
 

@@ -21,6 +21,14 @@ export default function Login({ onLogin }: LoginProps) {
         role: "admin",
         status: "DISPONIBLE"
       });
+    } else if (email.includes("call")) {
+      onLogin({
+        id: "call-1",
+        name: "Operador Call Center",
+        email: email,
+        role: "call_center",
+        status: "DISPONIBLE"
+      });
     } else {
       onLogin({
         id: "driver-1",

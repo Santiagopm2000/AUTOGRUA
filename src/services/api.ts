@@ -8,6 +8,11 @@ export const api = {
     return res.json();
   },
 
+  getAllUsers: async (): Promise<User[]> => {
+    const res = await fetch(`${API_BASE}/admin/users`);
+    return res.json();
+  },
+
   updateStatus: async (userId: string, status: string, lat?: number, lng?: number) => {
     await fetch(`${API_BASE}/update-status`, {
       method: "POST",
@@ -17,7 +22,7 @@ export const api = {
   },
 
   // Admin User Management
-  createUser: async (data: { name: string; email: string; role: string }) => {
+  createUser: async (data: { name: string; email: string; phone: string; role: string }) => {
     const res = await fetch(`${API_BASE}/admin/users`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
