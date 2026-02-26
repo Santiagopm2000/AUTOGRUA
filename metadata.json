@@ -1,0 +1,5 @@
+{
+  "name": "TowAssist Pro",
+  "description": "Gestión integral de servicios de grúas con geolocalización en tiempo real y automatización vía WhatsApp.",
+  "requestFramePermissions": ["geolocation"]
+}
