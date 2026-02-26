@@ -75,19 +75,19 @@ export default function FleetDashboard() {
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tighter uppercase">Panel de Flota</h1>
-          <p className="text-zinc-500 text-sm font-medium">Estado en tiempo real de todos los conductores</p>
+          <h1 className="text-3xl font-black tracking-tighter uppercase text-slate-900">Flota <span className="text-blue-600">Axistcorp</span></h1>
+          <p className="text-slate-500 text-sm font-medium">Estado en tiempo real de todos los conductores</p>
         </div>
         <div className="flex gap-2">
-          <div className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Live Sync</span>
+          <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2 shadow-sm">
+            <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Live Sync</span>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {drivers.map((driver) => {
+        {Array.isArray(drivers) && drivers.map((driver) => {
           const config = getStatusConfig(driver.status);
           const Icon = config.icon;
 
@@ -97,7 +97,7 @@ export default function FleetDashboard() {
               key={driver.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`bg-zinc-900 border ${config.border} rounded-[2rem] p-6 shadow-xl transition-all hover:scale-[1.02]`}
+              className={`bg-white border ${config.border.replace('zinc', 'slate')} rounded-[2rem] p-6 shadow-sm transition-all hover:shadow-xl hover:scale-[1.02]`}
             >
               <div className="flex justify-between items-start mb-6">
                 <div className={`p-4 rounded-2xl ${config.bg}`}>
@@ -107,7 +107,7 @@ export default function FleetDashboard() {
                   <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${config.color} mb-1 block`}>
                     {driver.status}
                   </span>
-                  <div className="flex items-center gap-1 text-zinc-500 text-xs font-mono">
+                  <div className="flex items-center gap-1 text-slate-400 text-xs font-mono">
                     <Clock className="w-3 h-3" />
                     {formatElapsed(driver.status_start_time)}
                   </div>
@@ -116,18 +116,18 @@ export default function FleetDashboard() {
 
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-xl font-bold text-white leading-tight">{driver.name}</h3>
-                  <p className="text-zinc-500 text-xs font-medium mb-4">{driver.email}</p>
+                  <h3 className="text-xl font-bold text-slate-900 leading-tight">{driver.name}</h3>
+                  <p className="text-slate-500 text-xs font-medium mb-4">{driver.email}</p>
                   
                   {driver.phone && (
                     <div className="flex items-center gap-2 mb-4">
-                      <div className="flex-1 bg-zinc-800/50 border border-zinc-700/30 rounded-xl px-3 py-2 flex items-center gap-2">
-                        <Phone className="w-3 h-3 text-zinc-500" />
-                        <span className="text-xs font-mono text-zinc-300">{driver.phone}</span>
+                      <div className="flex-1 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 flex items-center gap-2">
+                        <Phone className="w-3 h-3 text-slate-400" />
+                        <span className="text-xs font-mono text-slate-600">{driver.phone}</span>
                       </div>
                       <button 
                         onClick={() => openWhatsApp(driver.phone)}
-                        className="p-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 rounded-xl transition-all shadow-lg shadow-emerald-500/20 group"
+                        className="p-2 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl transition-all shadow-lg shadow-emerald-500/20 group"
                         title="Contactar por WhatsApp"
                       >
                         <MessageCircle className="w-5 h-5 group-hover:scale-110 transition-transform" />
@@ -136,15 +136,15 @@ export default function FleetDashboard() {
                   )}
                 </div>
 
-                <div className="pt-4 border-t border-zinc-800/50 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-zinc-400">
+                <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-slate-400">
                     <MapPin className="w-4 h-4" />
                     <span className="text-[10px] font-bold uppercase tracking-widest">
                       {driver.last_lat ? `${driver.last_lat.toFixed(4)}, ${driver.last_lng?.toFixed(4)}` : 'Sin Señal'}
                     </span>
                   </div>
                   {driver.last_lat && (
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                    <div className="w-2 h-2 rounded-full bg-blue-600 shadow-[0_0_8px_rgba(37,99,235,0.5)]" />
                   )}
                 </div>
               </div>
@@ -154,9 +154,9 @@ export default function FleetDashboard() {
       </div>
 
       {drivers.length === 0 && (
-        <div className="text-center py-20 bg-zinc-900/50 border border-dashed border-zinc-800 rounded-[2rem]">
-          <Truck className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
-          <p className="text-zinc-500 font-bold uppercase tracking-widest">No hay conductores registrados</p>
+        <div className="text-center py-20 bg-white border border-dashed border-slate-200 rounded-[2rem]">
+          <Truck className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+          <p className="text-slate-400 font-bold uppercase tracking-widest">No hay conductores registrados</p>
         </div>
       )}
     </div>

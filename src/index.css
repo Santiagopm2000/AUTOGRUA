@@ -1,1 +1,15 @@
 @import "tailwindcss";
+
+@theme {
+  --color-brand-blue: #1e40af; /* Blue 800 */
+  --color-brand-accent: #3b82f6; /* Blue 500 */
+  --color-brand-bg: #f8fafc; /* Slate 50 */
+  --color-brand-surface: #ffffff;
+  --color-brand-border: #e2e8f0; /* Slate 200 */
+}
+
+@layer base {
+  body {
+    @apply bg-brand-bg text-slate-900;
+  }
+}

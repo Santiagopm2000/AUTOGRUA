@@ -1,5 +1,5 @@
 {
-  "name": "TowAssist Pro",
-  "description": "Gestión integral de servicios de grúas con geolocalización en tiempo real y automatización vía WhatsApp.",
+  "name": "Axistcorp Towing",
+  "description": "Sistema de gestión de flota y asistencia de grúas para Axistcorp con geolocalización en tiempo real.",
   "requestFramePermissions": ["geolocation"]
 }

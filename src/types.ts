@@ -9,6 +9,7 @@ export interface User {
   role: UserRole;
   status: UserStatus;
   status_start_time?: string;
+  shift_start_time?: string;
   last_lat?: number;
   last_lng?: number;
   last_update?: string;
