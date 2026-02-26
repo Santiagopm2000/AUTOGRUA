@@ -1,16 +1,19 @@
 # --- Etapa de Construcción ---
 FROM node:20-slim AS builder
 
-WORKDIR /app
+# Instalar dependencias del sistema necesarias para compilar módulos nativos
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
-# Instalar dependencias necesarias para compilar (especialmente si usas better-sqlite3 o similares)
-RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
 
 COPY package*.json ./
 RUN npm install
 
 COPY . .
-# Esto genera la carpeta /app/dist
 RUN npm run build
 
 # --- Etapa de Ejecución ---
@@ -18,19 +21,17 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Copiamos TODOS los archivos necesarios
+# Copiar archivos esenciales desde el builder
 COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.ts ./
+COPY --from=builder /app/node_modules ./node_modules
 
-# Instalamos tsx globalmente para ejecutar el server.ts
+# Instalar tsx globalmente para ejecutar el server.ts en TS
 RUN npm install -g tsx
 
-# Variable de entorno para asegurar que Node sepa que estamos en producción
+# Configurar entorno
 ENV NODE_ENV=production
-
-# Exponer el puerto que configuramos en Easypanel
 EXPOSE 3000
 
 # Comando de inicio
