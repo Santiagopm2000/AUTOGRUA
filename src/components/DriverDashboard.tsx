@@ -33,6 +33,40 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
   const [totalShiftTime, setTotalShiftTime] = useState<string | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  // Check for existing permission and listen for install prompt
+  useEffect(() => {
+    if ("permissions" in navigator) {
+      navigator.permissions.query({ name: 'geolocation' as PermissionName }).then((result) => {
+        if (result.state === 'prompt') {
+          setShowPermissionModal(true);
+        } else if (result.state === 'denied') {
+          setGeoError("Permiso de ubicación denegado. Por favor, habilítalo en la configuración de tu celular.");
+        }
+      });
+    } else {
+      setShowPermissionModal(true);
+    }
+
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   // Initialize total shift time if already finished
   useEffect(() => {
@@ -69,6 +103,7 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
   const startTracking = useCallback(() => {
     if ("geolocation" in navigator) {
       setGeoError(null);
+      setShowPermissionModal(false);
       const watchId = navigator.geolocation.watchPosition(
         (pos) => {
           const newLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -143,6 +178,38 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
 
   return (
     <div className="space-y-6 pb-20">
+      {/* Permission Request Overlay */}
+      <AnimatePresence>
+        {showPermissionModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full text-center shadow-2xl"
+            >
+              <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <MapPin className="w-10 h-10 text-blue-600" />
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 mb-4 tracking-tight">Activar GPS</h3>
+              <p className="text-slate-500 text-sm leading-relaxed mb-8">
+                Para operar, Axistcorp necesita rastrear tu ubicación en tiempo real. Esto permite asignar servicios cercanos y reportar tu estado al centro de control.
+              </p>
+              <button
+                onClick={() => startTracking()}
+                className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl shadow-blue-600/20 active:scale-95 transition-transform uppercase tracking-widest text-sm"
+              >
+                Habilitar Ubicación
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Current State Timer - High Contrast */}
       <section className="bg-white border border-slate-200 rounded-[2.5rem] p-10 shadow-sm text-center">
         <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4">
@@ -206,30 +273,43 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
         "border rounded-2xl p-5 shadow-sm transition-colors",
         geoError ? "bg-red-50 border-red-200" : "bg-white border-slate-200"
       )}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={cn(
-              "w-3 h-3 rounded-full animate-pulse",
-              location ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"
-            )} />
-            <span className={cn(
-              "text-[10px] font-black uppercase tracking-widest",
-              geoError ? "text-red-600" : "text-slate-400"
-            )}>
-              {geoError || (location ? "GPS Activo" : "Buscando GPS...")}
-            </span>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                "w-3 h-3 rounded-full animate-pulse",
+                location ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]"
+              )} />
+              <span className={cn(
+                "text-[10px] font-black uppercase tracking-widest",
+                geoError ? "text-red-600" : "text-slate-400"
+              )}>
+                {geoError || (location ? "GPS Activo" : "Buscando GPS...")}
+              </span>
+            </div>
+            {location && !geoError && (
+              <span className="text-[10px] font-mono text-slate-300 font-bold">
+                {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
+              </span>
+            )}
           </div>
-          {location && !geoError && (
-            <span className="text-[10px] font-mono text-slate-300 font-bold">
-              {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
-            </span>
+
+          {deferredPrompt && (
+            <button 
+              onClick={handleInstallClick}
+              className="flex items-center justify-center gap-2 w-full bg-slate-900 text-white py-4 rounded-xl font-black text-[10px] uppercase tracking-widest active:scale-95 transition-transform"
+            >
+              <Truck className="w-4 h-4" />
+              Descargar App en el Celular
+            </button>
           )}
+
           {geoError && (
             <button 
               onClick={() => window.location.reload()}
-              className="text-[10px] font-black uppercase bg-red-600 text-white px-3 py-1 rounded-lg"
+              className="text-[10px] font-black uppercase bg-red-600 text-white px-3 py-3 rounded-xl w-full"
             >
-              Reintentar
+              Reintentar GPS
             </button>
           )}
         </div>
