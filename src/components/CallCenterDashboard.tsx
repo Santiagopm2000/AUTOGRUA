@@ -1,28 +1,64 @@
 import React, { useState, useEffect } from "react";
-import { User } from "../types";
+import { User, Integration } from "../types";
 import { api } from "../services/api";
 import { 
   Users, 
   Truck, 
   Map as MapIcon, 
   RefreshCcw,
-  Clock
+  Clock,
+  MessageSquare,
+  ExternalLink
 } from "lucide-react";
 import { motion } from "motion/react";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix for Leaflet default icon issues in Vite
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+    iconUrl: icon,
+    shadowUrl: iconShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41]
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
+
+// Helper component to center map on drivers
+function MapRecenter({ drivers }: { drivers: User[] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (drivers.length > 0) {
+      const validDrivers = drivers.filter(d => d.last_lat && d.last_lng);
+      if (validDrivers.length > 0) {
+        const bounds = L.latLngBounds(validDrivers.map(d => [d.last_lat!, d.last_lng!] as [number, number]));
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+      }
+    }
+  }, [drivers, map]);
+  return null;
+}
 
 export default function CallCenterDashboard() {
   const [drivers, setDrivers] = useState<User[]>([]);
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [stats, setStats] = useState({ activeDrivers: 0, inService: 0 });
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
     try {
-      const [driversData, statsData] = await Promise.all([
+      const [driversData, statsData, integrationsData] = await Promise.all([
         api.getDrivers(),
-        api.getAdminStats()
+        api.getAdminStats(),
+        api.getIntegrations()
       ]);
       setDrivers(driversData);
       setStats(statsData);
+      setIntegrations(integrationsData.filter(i => i.active));
     } catch (error) {
       console.error("Error fetching monitoring data:", error);
     } finally {
@@ -53,6 +89,36 @@ export default function CallCenterDashboard() {
     const hours = Math.floor(diff / 3600000);
     const minutes = Math.floor((diff % 3600000) / 60000);
     return `${hours}h ${minutes}m`;
+  };
+
+  const handleWhatsApp = async (driver: User) => {
+    // 1. Open WhatsApp directly
+    const phone = driver.phone?.replace(/\D/g, '');
+    const message = encodeURIComponent(`Hola ${driver.name}, te contactamos de la central Axistcorp. ¿Cuál es tu estado actual?`);
+    const whatsappUrl = `https://wa.me/${phone}?text=${message}`;
+    
+    // 2. Trigger n8n integrations if they exist
+    const n8nIntegrations = integrations.filter(i => i.name.toLowerCase().includes('n8n') || i.url.includes('n8n'));
+    
+    for (const integration of n8nIntegrations) {
+      try {
+        await fetch(integration.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'whatsapp_contact',
+            driver_id: driver.id,
+            driver_name: driver.name,
+            driver_phone: driver.phone,
+            timestamp: new Date().toISOString()
+          })
+        });
+      } catch (err) {
+        console.error(`Error triggering integration ${integration.name}:`, err);
+      }
+    }
+
+    window.open(whatsappUrl, '_blank');
   };
 
   if (loading) return <div className="flex justify-center py-20">Cargando Monitoreo...</div>;
@@ -95,53 +161,65 @@ export default function CallCenterDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Real-time Map Simulation */}
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl overflow-hidden min-h-[500px] relative shadow-sm">
-          <div className="absolute inset-0 opacity-10 pointer-events-none">
-            <div className="w-full h-full bg-[radial-gradient(#1e40af_1px,transparent_1px)] [background-size:40px_40px]" />
-          </div>
-
-          <div className="relative w-full h-full flex items-center justify-center bg-slate-50/50">
-            {Array.isArray(drivers) && drivers.map((driver, idx) => (
-              <motion.div
-                key={driver.id}
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="absolute"
-                style={{
-                  left: `${20 + (idx * 15)}%`,
-                  top: `${30 + (idx * 12)}%`
-                }}
-              >
-                <div className="group relative">
-                  <div className={`w-12 h-12 rounded-full border-4 ${getStatusColor(driver.status).replace('bg-', 'border-')} bg-white flex items-center justify-center shadow-xl`}>
-                    <Truck className={`w-6 h-6 ${getStatusColor(driver.status).replace('bg-', 'text-')}`} />
-                  </div>
-                  
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-                    <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xl min-w-[150px]">
-                      <p className="font-bold text-sm text-slate-900">{driver.name}</p>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">{driver.status}</p>
-                      <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1 font-mono">
-                        <Clock className="w-3 h-3" /> {formatElapsed(driver.status_start_time)}
-                      </p>
+        {/* Real-time Map */}
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl overflow-hidden min-h-[500px] relative shadow-sm z-10">
+          <MapContainer 
+            center={[4.6243, -74.0636]} 
+            zoom={13} 
+            style={{ height: '100%', width: '100%' }}
+            scrollWheelZoom={true}
+          >
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            {Array.isArray(drivers) && drivers.filter(d => d.last_lat && d.last_lng).map((driver) => (
+              <Marker 
+                key={driver.id} 
+                position={[driver.last_lat!, driver.last_lng!]}
+                icon={L.divIcon({
+                  className: 'custom-div-icon',
+                  html: `
+                    <div class="relative">
+                      <div class="w-10 h-10 rounded-full border-4 ${getStatusColor(driver.status).replace('bg-', 'border-')} bg-white flex items-center justify-center shadow-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-truck ${getStatusColor(driver.status).replace('bg-', 'text-')}"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-2.18-2.725A1 1 0 0 0 18.82 9H15"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>
+                      </div>
+                      <div class="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-white px-2 py-0.5 rounded-full border border-slate-200 shadow-sm whitespace-nowrap">
+                        <span class="text-[8px] font-black uppercase tracking-tighter">${driver.name.split(' ')[0]}</span>
+                      </div>
                     </div>
+                  `,
+                  iconSize: [40, 40],
+                  iconAnchor: [20, 20]
+                })}
+              >
+                <Popup>
+                  <div className="p-1">
+                    <p className="font-bold text-slate-900">{driver.name}</p>
+                    <p className="text-[10px] text-slate-500 uppercase font-black mb-2">{driver.status}</p>
+                    <button 
+                      onClick={() => handleWhatsApp(driver)}
+                      className="w-full bg-emerald-500 text-white text-[10px] font-black py-2 rounded-lg flex items-center justify-center gap-1 uppercase tracking-widest"
+                    >
+                      <MessageSquare className="w-3 h-3" /> WhatsApp
+                    </button>
                   </div>
-                </div>
-              </motion.div>
+                </Popup>
+              </Marker>
             ))}
-          </div>
+            <MapRecenter drivers={drivers} />
+          </MapContainer>
         </div>
 
         {/* Driver List with Timers */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 overflow-y-auto max-h-[500px] shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 overflow-y-auto max-h-[600px] shadow-sm">
           <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-6 flex items-center gap-2">
             <Users className="w-4 h-4" /> Unidades en Campo
           </h3>
           <div className="space-y-4">
             {Array.isArray(drivers) && drivers.map(driver => (
-              <div key={driver.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 hover:border-blue-200 transition-all">
-                <div className="flex items-center justify-between mb-2">
+              <div key={driver.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 hover:border-blue-200 transition-all group">
+                <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <div className={`w-3 h-3 rounded-full ${getStatusColor(driver.status)}`} />
                     <p className="font-bold text-sm text-slate-900">{driver.name}</p>
@@ -150,7 +228,8 @@ export default function CallCenterDashboard() {
                     {formatElapsed(driver.status_start_time)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-[10px] uppercase tracking-widest font-black text-slate-400">
+                
+                <div className="flex items-center justify-between text-[10px] uppercase tracking-widest font-black text-slate-400 mb-4">
                   <span>{driver.status}</span>
                   {driver.last_lat && (
                     <span className="flex items-center gap-1 text-emerald-500">
@@ -158,6 +237,13 @@ export default function CallCenterDashboard() {
                     </span>
                   )}
                 </div>
+
+                <button 
+                  onClick={() => handleWhatsApp(driver)}
+                  className="w-full bg-white border border-slate-200 hover:border-emerald-500 hover:text-emerald-600 text-slate-600 py-3 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 font-black text-[10px] uppercase tracking-widest"
+                >
+                  <MessageSquare className="w-4 h-4" /> Contactar WhatsApp
+                </button>
               </div>
             ))}
           </div>
