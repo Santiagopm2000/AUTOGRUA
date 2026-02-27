@@ -11,25 +11,14 @@ import {
   ToggleLeft,
   ToggleRight,
   Share2,
-  MessageSquare,
-  BarChart3,
-  FileText,
-  Download
+  MessageSquare
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
 
 export default function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [integrations, setIntegrations] = useState<Integration[]>([]);
-  const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'users' | 'integrations' | 'reports'>('users');
   
   // User creation state
   const [showUserModal, setShowUserModal] = useState(false);
@@ -41,14 +30,12 @@ export default function AdminDashboard() {
 
   const fetchData = async () => {
     try {
-      const [usersData, integrationsData, historyData] = await Promise.all([
+      const [usersData, integrationsData] = await Promise.all([
         api.getAllUsers(),
-        api.getIntegrations(),
-        api.getServiceHistory()
+        api.getIntegrations()
       ]);
       setUsers(usersData);
       setIntegrations(integrationsData);
-      setHistory(historyData);
     } catch (error) {
       console.error("Error fetching admin data:", error);
     } finally {
@@ -101,174 +88,94 @@ export default function AdminDashboard() {
         <h1 className="text-2xl font-black flex items-center gap-2 text-slate-900 uppercase tracking-tighter">
           <Settings className="w-8 h-8 text-blue-600" /> Configuración <span className="text-blue-600">Axistcorp</span>
         </h1>
-        <div className="flex gap-2">
-          <div className="bg-white border border-slate-200 rounded-xl p-1 flex gap-1">
-            <button 
-              onClick={() => setActiveTab('users')}
-              className={cn(
-                "px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
-                activeTab === 'users' ? "bg-slate-900 text-white" : "text-slate-400 hover:text-slate-600"
-              )}
-            >
-              Usuarios
-            </button>
-            <button 
-              onClick={() => setActiveTab('integrations')}
-              className={cn(
-                "px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
-                activeTab === 'integrations' ? "bg-slate-900 text-white" : "text-slate-400 hover:text-slate-600"
-              )}
-            >
-              n8n / API
-            </button>
-            <button 
-              onClick={() => setActiveTab('reports')}
-              className={cn(
-                "px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
-                activeTab === 'reports' ? "bg-slate-900 text-white" : "text-slate-400 hover:text-slate-600"
-              )}
-            >
-              Reportes
-            </button>
-          </div>
-          <button 
-            onClick={fetchData}
-            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold p-3 rounded-xl transition-all shadow-sm"
-          >
-            <RefreshCcw className="w-5 h-5" />
-          </button>
-        </div>
+        <button 
+          onClick={fetchData}
+          className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold p-3 rounded-xl transition-all shadow-sm"
+        >
+          <RefreshCcw className="w-5 h-5" />
+        </button>
       </div>
 
-      {activeTab === 'reports' ? (
-        <section className="bg-white border border-slate-200 rounded-[2.5rem] p-10 shadow-sm">
-          <div className="flex items-center justify-between mb-10">
-            <div>
-              <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Reporte de Servicios</h2>
-              <p className="text-slate-500 font-medium">Historial de actividad y tiempos de respuesta</p>
-            </div>
-            <button className="bg-emerald-500 text-white font-black px-6 py-3 rounded-2xl flex items-center gap-2 shadow-xl shadow-emerald-500/20 active:scale-95 transition-all text-xs uppercase tracking-widest">
-              <Download className="w-4 h-4" /> Exportar Excel
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Share Section */}
+        <section className="bg-blue-600 rounded-3xl p-8 shadow-xl shadow-blue-600/20 lg:col-span-2 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="text-white text-center md:text-left">
+            <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Enviar App a Conductores</h2>
+            <p className="text-blue-100 font-medium opacity-80">Usa este link para que los conductores instalen la App en sus celulares.</p>
+          </div>
+          <button 
+            onClick={shareAppLink}
+            className="bg-white text-blue-600 font-black px-8 py-4 rounded-2xl flex items-center gap-3 shadow-xl active:scale-95 transition-all uppercase tracking-widest text-sm"
+          >
+            <MessageSquare className="w-5 h-5" /> Compartir por WhatsApp
+          </button>
+        </section>
+
+        {/* User Management */}
+        <section className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900">
+              <Users className="w-6 h-6 text-blue-600" /> Gestión de Usuarios
+            </h2>
+            <button 
+              onClick={() => setShowUserModal(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl text-sm flex items-center gap-2 shadow-lg shadow-blue-600/20"
+            >
+              <Plus className="w-4 h-4" /> AGREGAR
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="pb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Conductor</th>
-                  <th className="pb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Estado</th>
-                  <th className="pb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Inicio</th>
-                  <th className="pb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Última Ubic.</th>
-                  <th className="pb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {history.map(item => (
-                  <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-4 font-bold text-slate-900">{item.driverName}</td>
-                    <td className="py-4">
-                      <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase tracking-widest">
-                        {item.status}
-                      </span>
-                    </td>
-                    <td className="py-4 text-xs font-mono text-slate-500">
-                      {new Date(item.startTime).toLocaleString()}
-                    </td>
-                    <td className="py-4 text-xs font-mono text-slate-500">{item.location}</td>
-                    <td className="py-4">
-                      <button className="p-2 text-slate-300 hover:text-blue-600 transition-colors">
-                        <FileText className="w-5 h-5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-4">
+            {Array.isArray(users) && users.map(user => (
+              <div key={user.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div>
+                  <p className="font-bold text-slate-900">{user.name}</p>
+                  <p className="text-xs text-slate-500 font-medium">{user.email} • <span className="uppercase font-black text-blue-600">{user.role}</span></p>
+                </div>
+                <button 
+                  onClick={() => deleteUser(user.id)}
+                  className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
+            ))}
           </div>
         </section>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Share Section */}
-          <section className="bg-blue-600 rounded-3xl p-8 shadow-xl shadow-blue-600/20 lg:col-span-2 flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="text-white text-center md:text-left">
-              <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Enviar App a Conductores</h2>
-              <p className="text-blue-100 font-medium opacity-80">Usa este link para que los conductores instalen la App en sus celulares.</p>
-            </div>
+
+        {/* Integrations Management */}
+        <section className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900">
+              <Globe className="w-6 h-6 text-blue-600" /> Integraciones (n8n)
+            </h2>
             <button 
-              onClick={shareAppLink}
-              className="bg-white text-blue-600 font-black px-8 py-4 rounded-2xl flex items-center gap-3 shadow-xl active:scale-95 transition-all uppercase tracking-widest text-sm"
+              onClick={() => setShowIntModal(true)}
+              className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-xl text-sm flex items-center gap-2 shadow-lg shadow-slate-900/20"
             >
-              <MessageSquare className="w-5 h-5" /> Compartir por WhatsApp
+              <Plus className="w-4 h-4" /> AGREGAR
             </button>
-          </section>
+          </div>
 
-          {activeTab === 'users' ? (
-            <section className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm lg:col-span-2">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900">
-                  <Users className="w-6 h-6 text-blue-600" /> Gestión de Usuarios
-                </h2>
-                <button 
-                  onClick={() => setShowUserModal(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl text-sm flex items-center gap-2 shadow-lg shadow-blue-600/20"
-                >
-                  <Plus className="w-4 h-4" /> AGREGAR
-                </button>
+          <div className="space-y-4">
+            {Array.isArray(integrations) && integrations.map(int => (
+              <div key={int.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-bold text-slate-900">{int.name}</p>
+                  <button onClick={() => toggleIntegration(int.id, int.active)}>
+                    {int.active ? (
+                      <ToggleRight className="w-8 h-8 text-blue-600" />
+                    ) : (
+                      <ToggleLeft className="w-8 h-8 text-slate-300" />
+                    )}
+                  </button>
+                </div>
+                <p className="text-[10px] font-mono text-slate-400 truncate">{int.url}</p>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {Array.isArray(users) && users.map(user => (
-                  <div key={user.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <div>
-                      <p className="font-bold text-slate-900">{user.name}</p>
-                      <p className="text-xs text-slate-500 font-medium">{user.email} • <span className="uppercase font-black text-blue-600">{user.role}</span></p>
-                    </div>
-                    <button 
-                      onClick={() => deleteUser(user.id)}
-                      className="p-2 text-slate-300 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : (
-            <section className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm lg:col-span-2">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900">
-                  <Globe className="w-6 h-6 text-blue-600" /> Integraciones (n8n / AI Agents)
-                </h2>
-                <button 
-                  onClick={() => setShowIntModal(true)}
-                  className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-xl text-sm flex items-center gap-2 shadow-lg shadow-slate-900/20"
-                >
-                  <Plus className="w-4 h-4" /> AGREGAR
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {Array.isArray(integrations) && integrations.map(int => (
-                  <div key={int.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="font-bold text-slate-900">{int.name}</p>
-                      <button onClick={() => toggleIntegration(int.id, int.active)}>
-                        {int.active ? (
-                          <ToggleRight className="w-8 h-8 text-blue-600" />
-                        ) : (
-                          <ToggleLeft className="w-8 h-8 text-slate-300" />
-                        )}
-                      </button>
-                    </div>
-                    <p className="text-[10px] font-mono text-slate-400 truncate">{int.url}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
-      )}
+            ))}
+          </div>
+        </section>
+      </div>
 
       {/* Modals */}
       <AnimatePresence>

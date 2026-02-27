@@ -3,7 +3,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
-import { supabase } from "./src/services/supabase";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,34 +31,6 @@ async function startServer() {
   // API Health check
   app.get("/api/health", (req, res) => res.json({ status: "ok" }));
   app.get("/ping", (req, res) => res.send("Axistcorp: pong"));
-
-  // External API for n8n / AI Agents to update driver status
-  app.post("/api/external/update-status", express.json(), async (req, res) => {
-    const { userId, status, lat, lng } = req.body;
-    if (!userId || !status) {
-      return res.status(400).json({ error: "Missing userId or status" });
-    }
-    
-    try {
-      // Note: In a real app, we'd verify an API key here
-      const now = new Date().toISOString();
-      const { error } = await supabase
-        .from("users")
-        .update({ 
-          status, 
-          last_lat: lat, 
-          last_lng: lng, 
-          last_update: now,
-          status_start_time: now 
-        })
-        .eq("id", userId);
-
-      if (error) throw error;
-      res.json({ success: true, message: `Status updated to ${status} for user ${userId}` });
-    } catch (err) {
-      res.status(500).json({ error: "Failed to update status externally" });
-    }
-  });
 
   if (!isProd) {
     // MODO DESARROLLO: Usar Vite Middleware

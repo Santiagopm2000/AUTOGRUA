@@ -8,15 +8,11 @@ import {
   Wrench,
   Truck,
   LogOut,
-  Play,
-  Bell,
-  AlertTriangle
+  Play
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-
-const BELL_SOUND_URL = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -39,8 +35,6 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
   const [geoError, setGeoError] = useState<string | null>(null);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showAlarmModal, setShowAlarmModal] = useState(false);
-  const [alarmType, setAlarmType] = useState<'hourly' | 'shift_end'>('hourly');
 
   // Check for existing permission and listen for install prompt
   useEffect(() => {
@@ -87,7 +81,7 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
     }
   }, [user]);
 
-  // Timer logic and Alarms
+  // Timer logic
   useEffect(() => {
     if (status === 'TERMINE TURNO') return;
 
@@ -102,36 +96,9 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
       setElapsed(
         `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
       );
-
-      // Hourly Alarm (every 60 minutes of same status)
-      if (minutes === 0 && seconds === 0 && hours > 0) {
-        triggerAlarm('hourly');
-      }
-
-      // Shift End Reminder (after 8 hours of shift)
-      if (shiftStartTime) {
-        const shiftDiff = now.getTime() - shiftStartTime.getTime();
-        const shiftHours = Math.floor(shiftDiff / 3600000);
-        const shiftMinutes = Math.floor((shiftDiff % 3600000) / 60000);
-        if (shiftHours >= 8 && shiftMinutes === 0 && seconds === 0) {
-          triggerAlarm('shift_end');
-        }
-      }
     }, 1000);
     return () => clearInterval(interval);
-  }, [statusStartTime, status, shiftStartTime]);
-
-  const triggerAlarm = (type: 'hourly' | 'shift_end') => {
-    setAlarmType(type);
-    setShowAlarmModal(true);
-    const audio = new Audio(BELL_SOUND_URL);
-    audio.play().catch(e => console.log("Audio play blocked", e));
-    
-    // Vibrate if supported
-    if ("vibrate" in navigator) {
-      navigator.vibrate([200, 100, 200]);
-    }
-  };
+  }, [statusStartTime, status]);
 
   const startTracking = useCallback(() => {
     if ("geolocation" in navigator) {
@@ -211,46 +178,6 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
 
   return (
     <div className="space-y-6 pb-20">
-      {/* Alarm Modal */}
-      <AnimatePresence>
-        {showAlarmModal && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[110] bg-red-600/95 backdrop-blur-md flex items-center justify-center p-6"
-          >
-            <motion.div 
-              initial={{ scale: 0.8, rotate: -5 }}
-              animate={{ scale: 1, rotate: 0 }}
-              className="bg-white rounded-[3rem] p-10 max-w-sm w-full text-center shadow-2xl"
-            >
-              <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-8 animate-bounce">
-                {alarmType === 'hourly' ? (
-                  <Bell className="w-12 h-12 text-red-600" />
-                ) : (
-                  <AlertTriangle className="w-12 h-12 text-red-600" />
-                )}
-              </div>
-              <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tighter uppercase">
-                {alarmType === 'hourly' ? '¡Recordatorio!' : '¡Fin de Turno!'}
-              </h3>
-              <p className="text-slate-500 font-medium leading-relaxed mb-10">
-                {alarmType === 'hourly' 
-                  ? 'Ha pasado una hora en este estado. ¿Deseas actualizar tu disponibilidad o reportar novedad?' 
-                  : 'Has cumplido 8 horas de jornada. Es momento de reportar el cierre de tu turno.'}
-              </p>
-              <button
-                onClick={() => setShowAlarmModal(false)}
-                className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-transform uppercase tracking-widest text-sm"
-              >
-                Entendido
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Permission Request Overlay */}
       <AnimatePresence>
         {showPermissionModal && (

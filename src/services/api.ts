@@ -48,35 +48,10 @@ export const api = {
       updateData.shift_start_time = shiftStartTime;
     }
 
-    const { data: user } = await supabase
+    await supabase
       .from("users")
       .update(updateData)
-      .eq("id", userId)
-      .select()
-      .single();
-
-    // Trigger n8n integrations on status change
-    if (user) {
-      const { data: integrations } = await supabase.from("integrations").select("*").eq("active", true);
-      if (integrations) {
-        const n8nIntegrations = integrations.filter(i => i.name.toLowerCase().includes('n8n') || i.url.includes('n8n'));
-        for (const integration of n8nIntegrations) {
-          fetch(integration.url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              event: 'status_change',
-              user_id: user.id,
-              user_name: user.name,
-              new_status: status,
-              lat,
-              lng,
-              timestamp: now
-            })
-          }).catch(e => console.error("Integration trigger failed", e));
-        }
-      }
-    }
+      .eq("id", userId);
   },
 
   // Admin User Management
@@ -143,22 +118,5 @@ export const api = {
       activeDrivers: activeCount || 0,
       inService: inServiceCount || 0
     };
-  },
-
-  getServiceHistory: async (): Promise<any[]> => {
-    // In a real app, we'd have a 'services' table. 
-    // For this demo, we'll return mock history based on drivers' current stats
-    // but in a real scenario, this would query a dedicated history table.
-    const { data: drivers } = await supabase.from("users").select("*").eq("role", "driver");
-    if (!drivers) return [];
-    
-    return drivers.map(d => ({
-      id: `svc-${d.id}`,
-      driverName: d.name,
-      status: d.status,
-      startTime: d.status_start_time,
-      lastUpdate: d.last_update,
-      location: d.last_lat ? `${d.last_lat.toFixed(4)}, ${d.last_lng?.toFixed(4)}` : 'N/A'
-    }));
   }
 };
