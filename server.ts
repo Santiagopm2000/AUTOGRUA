@@ -10,10 +10,17 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const PORT = 3000;
-  const isProd = process.env.NODE_ENV === "production";
   const distPath = path.join(__dirname, "dist");
+  
+  // Prioridad: 
+  // 1. Si NODE_ENV es production
+  // 2. Si existe la carpeta dist (indicativo de que se hizo build para producción)
+  // 3. Si NO estamos en el entorno de desarrollo de AI Studio
+  const isProd = process.env.NODE_ENV === "production" || (fs.existsSync(distPath) && !process.env.VITE_DEV_SERVER);
 
-  console.log(`Iniciando Servidor Axistcorp en modo ${isProd ? "PRODUCCIÓN" : "DESARROLLO"}...`);
+  console.log(`[SERVER] Modo: ${isProd ? "PRODUCCIÓN" : "DESARROLLO"}`);
+  console.log(`[SERVER] NODE_ENV: ${process.env.NODE_ENV}`);
+  console.log(`[SERVER] Carpeta dist existe: ${fs.existsSync(distPath)}`);
 
   // Logging
   app.use((req, res, next) => {
@@ -26,9 +33,12 @@ async function startServer() {
   app.get("/ping", (req, res) => res.send("Axistcorp: pong"));
 
   if (!isProd) {
-    // MODO DESARROLLO: Usar Vite Middleware para el Preview de AI Studio
+    // MODO DESARROLLO: Usar Vite Middleware
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { 
+        middlewareMode: true,
+        allowedHosts: true // Permitir todos los hosts en desarrollo también
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);

@@ -32,5 +32,8 @@ RUN npm install -g tsx
 # Exponer el puerto 3000
 EXPOSE 3000
 
+# Forzar modo producción
+ENV NODE_ENV=production
+
 # Comando para iniciar el servidor
 CMD ["tsx", "server.ts"]
