@@ -9,7 +9,9 @@ import {
   Trash2,
   Globe,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Share2,
+  MessageSquare
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -73,6 +75,11 @@ export default function AdminDashboard() {
     }
   };
 
+  const shareAppLink = () => {
+    const text = encodeURIComponent(`Hola! Descarga aquí la App de Axistcorp para conductores: ${window.location.origin}`);
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+  };
+
   if (loading) return <div className="flex justify-center py-20">Cargando Panel Administrativo...</div>;
 
   return (
@@ -90,6 +97,20 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Share Section */}
+        <section className="bg-blue-600 rounded-3xl p-8 shadow-xl shadow-blue-600/20 lg:col-span-2 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="text-white text-center md:text-left">
+            <h2 className="text-2xl font-black uppercase tracking-tighter mb-2">Enviar App a Conductores</h2>
+            <p className="text-blue-100 font-medium opacity-80">Usa este link para que los conductores instalen la App en sus celulares.</p>
+          </div>
+          <button 
+            onClick={shareAppLink}
+            className="bg-white text-blue-600 font-black px-8 py-4 rounded-2xl flex items-center gap-3 shadow-xl active:scale-95 transition-all uppercase tracking-widest text-sm"
+          >
+            <MessageSquare className="w-5 h-5" /> Compartir por WhatsApp
+          </button>
+        </section>
+
         {/* User Management */}
         <section className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
           <div className="flex items-center justify-between mb-8">

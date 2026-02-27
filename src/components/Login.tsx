@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { User } from "../types";
-import { Truck, ArrowRight, AlertCircle } from "lucide-react";
+import { Truck, ArrowRight, AlertCircle, Share2, Download } from "lucide-react";
 import { motion } from "motion/react";
 import { api } from "../services/api";
 
@@ -12,6 +12,45 @@ export default function Login({ onLogin }: LoginProps) {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
+
+  const handleShare = async () => {
+    const shareData = {
+      title: 'Axistcorp App',
+      text: 'Descarga la App de Axistcorp para gestión de grúas y GPS.',
+      url: window.location.origin
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.log('Error sharing', err);
+      }
+    } else {
+      // Fallback to WhatsApp
+      const text = encodeURIComponent(`Descarga la App de Axistcorp aquí: ${window.location.origin}`);
+      window.open(`https://wa.me/?text=${text}`, '_blank');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,8 +118,24 @@ export default function Login({ onLogin }: LoginProps) {
           </button>
         </form>
 
-        <div className="mt-10 pt-8 border-t border-slate-50 text-center">
-          <p className="text-[10px] text-slate-300 font-black uppercase tracking-widest">
+        <div className="mt-10 pt-8 border-t border-slate-50 space-y-4">
+          {deferredPrompt && (
+            <button 
+              onClick={handleInstallClick}
+              className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg uppercase tracking-widest text-xs"
+            >
+              <Download className="w-4 h-4" /> Instalar App en Celular
+            </button>
+          )}
+
+          <button 
+            onClick={handleShare}
+            className="w-full bg-white border-2 border-slate-100 text-slate-600 font-black py-4 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 uppercase tracking-widest text-xs"
+          >
+            <Share2 className="w-4 h-4" /> Compartir Link de Descarga
+          </button>
+
+          <p className="text-[10px] text-slate-300 font-black uppercase tracking-widest text-center">
             Sistema de Gestión de Asistencia Vial
           </p>
         </div>
