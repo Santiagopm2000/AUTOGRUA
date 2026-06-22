@@ -197,26 +197,43 @@ export const api = {
     const { id, ...rest } = userData;
     const finalData = { id: customId, status: "DISPONIBLE", ...rest };
 
+    let dbSuccess = false;
+    let dbErrorMessage = "";
+
     try {
       const { data, error } = await supabase
         .from("users")
-        .insert([finalData])
+        .upsert([finalData])
         .select()
-        .single();
+        .maybeSingle();
+      
       if (error) {
         console.warn("Supabase user insertion error:", error);
+        dbErrorMessage = error.message;
+      } else {
+        dbSuccess = true;
       }
-    } catch (e) {
+    } catch (e: any) {
       console.warn("Encountered exception inserting user onto Supabase:", e);
+      dbErrorMessage = e?.message || String(e);
     }
 
     try {
       const rawLocal = localStorage.getItem("towassist_fallback_users");
-      const localUsers = rawLocal ? JSON.parse(rawLocal) : [];
-      localUsers.push(finalData);
+      let localUsers: any[] = rawLocal ? JSON.parse(rawLocal) : [];
+      const existingIdx = localUsers.findIndex(u => u.id === customId);
+      if (existingIdx >= 0) {
+        localUsers[existingIdx] = { ...localUsers[existingIdx], ...finalData };
+      } else {
+        localUsers.push(finalData);
+      }
       localStorage.setItem("towassist_fallback_users", JSON.stringify(localUsers));
     } catch (e) {
       console.error("Local storage fallback user insert error:", e);
+    }
+
+    if (!dbSuccess && dbErrorMessage) {
+      return { success: false, error: dbErrorMessage };
     }
 
     return { success: true, id: customId };

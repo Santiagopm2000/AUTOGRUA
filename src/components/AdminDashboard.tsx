@@ -96,7 +96,11 @@ export default function AdminDashboard() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.createUser(newUser);
+    const result = await api.createUser(newUser);
+    if (result && !result.success) {
+      alert(`Error al guardar en base de datos: ${result.error}\n\nPor favor, verifica que el correo sea único y esté configurado correctamente.`);
+      return;
+    }
     setShowUserModal(false);
     setNewUser({ id: "", name: "", email: "", phone: "", mobile: "", area: "", role: "driver" });
     fetchData();

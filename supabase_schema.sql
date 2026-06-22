@@ -19,7 +19,7 @@ CREATE TABLE users (
     mobile TEXT,                                     -- Celular / móvil (crucial para botón directo de WhatsApp)
     area TEXT,                                       -- Área o departamento (ej: Operaciones, Administración, Despacho)
     role TEXT NOT NULL DEFAULT 'driver' CHECK (role IN ('admin', 'call_center', 'driver')),
-    status TEXT NOT NULL DEFAULT 'DISPONIBLE' CHECK (status IN ('DISPONIBLE', 'EN SERVICIO', 'MANTENIMIENTO', 'INACTIVO')),
+    status TEXT NOT NULL DEFAULT 'DISPONIBLE' CHECK (status IN ('DISPONIBLE', 'EN SERVICIO', 'MANTENIMIENTO', 'INACTIVO', 'TERMINE TURNO')),
     status_start_time TIMESTAMPTZ DEFAULT NOW(),    -- Cuándo cambió a su estado actual
     shift_start_time TIMESTAMPTZ,                   -- Cuándo inició su turno de trabajo actual
     last_lat DOUBLE PRECISION,                       -- Última latitud registrada de su GPS
