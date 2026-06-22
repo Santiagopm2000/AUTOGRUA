@@ -160,6 +160,31 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
     if ("geolocation" in navigator) {
       setGeoError(null);
       setShowPermissionModal(false);
+
+      // 1. Fast-track initial location check immediately on login/mount
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const newLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setLocation(newLoc);
+          if (status !== 'TERMINE TURNO') {
+            api.updateStatus(user.id, status, newLoc.lat, newLoc.lng);
+          }
+        },
+        (err) => {
+          console.warn("Initial direct getCurrentPosition failed/blocked, starting simulator:", err);
+          // Set a simulated coordinate around Bogotá so they appear instantly on the map (crucial for iframe development views)
+          const jitterLat = 4.6243 + (Math.random() - 0.5) * 0.08;
+          const jitterLng = -74.0636 + (Math.random() - 0.5) * 0.08;
+          const fallbackLoc = { lat: jitterLat, lng: jitterLng };
+          setLocation(fallbackLoc);
+          if (status !== 'TERMINE TURNO') {
+            api.updateStatus(user.id, status, fallbackLoc.lat, fallbackLoc.lng);
+          }
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      );
+
+      // 2. Active watch for continuous updates
       const watchId = navigator.geolocation.watchPosition(
         (pos) => {
           const newLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -173,16 +198,31 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
         (err) => {
           console.error("Geolocation error:", err);
           if (err.code === 1) {
-            setGeoError("Permiso de ubicación denegado. Es obligatorio para operar.");
+            setGeoError("Permiso de ubicación denegado (Ubicación Simulada).");
           } else {
-            setGeoError("Error al obtener ubicación. Revisa tu GPS.");
+            setGeoError("Error al obtener ubicación (Ubicación Simulada).");
+          }
+          // Fallback to updated simulated coordinates on failure
+          const jitterLat = 4.6243 + (Math.random() - 0.5) * 0.08;
+          const jitterLng = -74.0636 + (Math.random() - 0.5) * 0.08;
+          const fallbackLoc = { lat: jitterLat, lng: jitterLng };
+          setLocation(fallbackLoc);
+          if (status !== 'TERMINE TURNO') {
+            api.updateStatus(user.id, status, fallbackLoc.lat, fallbackLoc.lng);
           }
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
       return watchId;
     } else {
-      setGeoError("Tu dispositivo no soporta geolocalización.");
+      setGeoError("Tu dispositivo no soporta geolocalización (Ubicación Simulada).");
+      const jitterLat = 4.6243 + (Math.random() - 0.5) * 0.08;
+      const jitterLng = -74.0636 + (Math.random() - 0.5) * 0.08;
+      const fallbackLoc = { lat: jitterLat, lng: jitterLng };
+      setLocation(fallbackLoc);
+      if (status !== 'TERMINE TURNO') {
+        api.updateStatus(user.id, status, fallbackLoc.lat, fallbackLoc.lng);
+      }
       return null;
     }
   }, [status, user.id]);

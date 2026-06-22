@@ -20,21 +20,16 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Copiar configuración de empaquetado y código pre-compilado
+# Copiar archivos compilados y dependencias necesarias
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/server.ts ./
 COPY --from=builder /app/node_modules ./node_modules
 
-# Instalar tsx de forma global para correr server.ts directamente en TypeScript de manera óptima
-RUN npm install -g tsx
-
-# Exponer puerto para ingress de Easypanel
+# Exponer el puerto de la aplicación (usualmente 3000, o por variable PORT)
 EXPOSE 3000
 
 # Definir variables de entorno
 ENV NODE_ENV=production
-ENV PORT=3000
 
-# Comando para iniciar el backend interactuando con el frontend compilado
-CMD ["tsx", "server.ts"]
+# Iniciar la aplicación usando Node.js nativo (muy rápido, sin overhead de TS en runtime)
+CMD ["node", "dist/server.cjs"]

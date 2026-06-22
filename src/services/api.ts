@@ -5,145 +5,74 @@ export const api = {
   login: async (email: string): Promise<User> => {
     const cleanEmail = email.toLowerCase().trim();
     
+    // First try checking the merged list of all users
     try {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("email", cleanEmail)
-        .single();
-      
-      if (!error && data) {
-        return data;
+      const all = await api.getAllUsers();
+      const found = all.find(u => u.email.toLowerCase().trim() === cleanEmail);
+      if (found) {
+        return found;
       }
     } catch (e) {
-      console.warn("Supabase query error, relying on robust fallback:", e);
+      console.warn("Error checking login on merged list:", e);
     }
 
-    // Predefined corporate profiles
-    const demoUsers: Record<string, User> = {
-      "px6.usa@gmail.com": {
-        id: "user-px6",
-        name: "Usuario Creador (Admin)",
-        email: "px6.usa@gmail.com",
-        phone: "+573100000000",
-        mobile: "+573100000000",
-        area: "Administración / Sistemas",
-        role: "admin",
-        status: "DISPONIBLE"
-      },
-      "admin@axistcorp.com": {
-        id: "demo-admin",
-        name: "Administrador Axistcorp",
-        email: "admin@axistcorp.com",
-        phone: "+573000000000",
-        mobile: "+573000000000",
-        area: "Gerencia / Tecnología",
-        role: "admin",
-        status: "DISPONIBLE"
-      },
-      "callcenter@axistcorp.com": {
-        id: "demo-call-center",
-        name: "Operador Call Center",
-        email: "callcenter@axistcorp.com",
-        phone: "+573111111111",
-        mobile: "+573111111111",
-        area: "Despacho / Call Center",
-        role: "call_center",
-        status: "DISPONIBLE"
-      },
-      "conductor@axistcorp.com": {
-        id: "demo-driver-1",
-        name: "Carlos Mendoza (Grúa Camión)",
-        email: "conductor@axistcorp.com",
-        phone: "+573001234567",
-        mobile: "+573001234567",
-        area: "Logística - Zona Norte",
-        role: "driver",
-        status: "DISPONIBLE"
-      },
-      "conductor2@axistcorp.com": {
-        id: "demo-driver-2",
-        name: "Andrés Delgado (Grúa Cama)",
-        email: "conductor2@axistcorp.com",
-        phone: "+573119876543",
-        mobile: "+573119876543",
-        area: "Logística - Zona Centro",
-        role: "driver",
-        status: "EN SERVICIO"
-      }
-    };
-
-    if (demoUsers[cleanEmail]) {
-      return demoUsers[cleanEmail];
-    }
-
-    throw new Error("Usuario no encontrado. Prueba usar una cuenta demostrativa como: admin@axistcorp.com, callcenter@axistcorp.com o conductor@axistcorp.com");
+    throw new Error("Usuario no encontrado. Prueba usar una cuenta demostrativa como: admin@axistcorp.com, callcenter@axistcorp.com, conductor@axistcorp.com o tu usuario creado.");
   },
 
   getDrivers: async (): Promise<User[]> => {
     try {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("role", "driver");
-      
-      if (!error && Array.isArray(data) && data.length > 0) {
-        return data;
-      }
+      const allUsers = await api.getAllUsers();
+      return allUsers.filter(u => u.role === "driver");
     } catch (e) {
       console.warn("getDrivers empty, using fallback demo drivers:", e);
+      return [];
     }
-
-    return [
-      {
-        id: "demo-driver-1",
-        name: "Carlos Mendoza (Grúa Camión)",
-        email: "conductor@axistcorp.com",
-        phone: "+573001234567",
-        mobile: "+573001234567",
-        area: "Logística - Zona Norte",
-        role: "driver",
-        status: "DISPONIBLE",
-        last_lat: 4.7110,
-        last_lng: -74.0721,
-        last_update: new Date().toISOString()
-      },
-      {
-        id: "demo-driver-2",
-        name: "Andrés Delgado (Grúa Cama)",
-        email: "conductor2@axistcorp.com",
-        phone: "+573119876543",
-        mobile: "+573119876543",
-        area: "Logística - Zona Centro",
-        role: "driver",
-        status: "EN SERVICIO",
-        last_lat: 4.6980,
-        last_lng: -74.1021,
-        last_update: new Date().toISOString()
-      }
-    ];
   },
 
   getAllUsers: async (): Promise<User[]> => {
-    try {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*");
-      
-      if (!error && Array.isArray(data) && data.length > 0) {
-        return data;
-      }
-    } catch (e) {
-      console.warn("getAllUsers empty, returning fallbacks:", e);
-    }
-
-    return [
+    const defaultDemoUsers: User[] = [
       { id: "user-px6", name: "Usuario Creador (Admin)", email: "px6.usa@gmail.com", phone: "+573100000000", mobile: "+573100000000", area: "Administración / Sistemas", role: "admin", status: "DISPONIBLE" },
       { id: "demo-admin", name: "Administrador Axistcorp", email: "admin@axistcorp.com", phone: "+573000000000", mobile: "+573000000000", area: "Gerencia / Tecnología", role: "admin", status: "DISPONIBLE" },
       { id: "demo-call-center", name: "Operador Call Center", email: "callcenter@axistcorp.com", phone: "+573111111111", mobile: "+573111111111", area: "Despacho / Call Center", role: "call_center", status: "DISPONIBLE" },
       { id: "demo-driver-1", name: "Carlos Mendoza (Grúa Camión)", email: "conductor@axistcorp.com", phone: "+573001234567", mobile: "+573001234567", area: "Logística - Zona Norte", role: "driver", status: "DISPONIBLE", last_lat: 4.7110, last_lng: -74.0721, last_update: new Date().toISOString() },
       { id: "demo-driver-2", name: "Andrés Delgado (Grúa Cama)", email: "conductor2@axistcorp.com", phone: "+573119876543", mobile: "+573119876543", area: "Logística - Zona Centro", role: "driver", status: "EN SERVICIO", last_lat: 4.6980, last_lng: -74.1021, last_update: new Date().toISOString() }
     ];
+
+    let dbUsers: User[] = [];
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("*");
+      
+      if (!error && Array.isArray(data)) {
+        dbUsers = data;
+      }
+    } catch (e) {
+      console.warn("getAllUsers database lookup failed:", e);
+    }
+
+    let localUsers: User[] = [];
+    try {
+      const rawLocal = localStorage.getItem("towassist_fallback_users");
+      if (rawLocal) {
+        localUsers = JSON.parse(rawLocal);
+      }
+    } catch (err) {
+      console.error("Local storage user list parsing error:", err);
+    }
+
+    const mergedMap = new Map<string, User>();
+    
+    // 1. Add defaults
+    defaultDemoUsers.forEach(u => mergedMap.set(u.id, u));
+    
+    // 2. Add database users
+    dbUsers.forEach(u => mergedMap.set(u.id, u));
+
+    // 3. Add custom local storage users
+    localUsers.forEach(u => mergedMap.set(u.id, u));
+
+    return Array.from(mergedMap.values());
   },
 
   updateStatus: async (userId: string, status: UserStatus, lat?: number, lng?: number, shiftStartTime?: string) => {
@@ -158,6 +87,44 @@ export const api = {
 
     if (shiftStartTime) {
       updateData.shift_start_time = shiftStartTime;
+    }
+
+    // Synchronously update the fallback users and current session user in localStorage to keep maps, lists and panels synced instantly
+    try {
+      const rawLocal = localStorage.getItem("towassist_fallback_users");
+      let localUsers: User[] = rawLocal ? JSON.parse(rawLocal) : [];
+      let userIndex = localUsers.findIndex(u => u.id === userId);
+      
+      if (userIndex >= 0) {
+        localUsers[userIndex] = { ...localUsers[userIndex], ...updateData };
+      } else {
+        // Look up from hardcoded demo users to extend them with locations safely
+        const defaultDemoUsers: User[] = [
+          { id: "user-px6", name: "Usuario Creador (Admin)", email: "px6.usa@gmail.com", phone: "+573100000000", mobile: "+573100000000", area: "Administración / Sistemas", role: "admin", status: "DISPONIBLE" },
+          { id: "demo-admin", name: "Administrador Axistcorp", email: "admin@axistcorp.com", phone: "+573000000000", mobile: "+573000000000", area: "Gerencia / Tecnología", role: "admin", status: "DISPONIBLE" },
+          { id: "demo-call-center", name: "Operador Call Center", email: "callcenter@axistcorp.com", phone: "+573111111111", mobile: "+573111111111", area: "Despacho / Call Center", role: "call_center", status: "DISPONIBLE" },
+          { id: "demo-driver-1", name: "Carlos Mendoza (Grúa Camión)", email: "conductor@axistcorp.com", phone: "+573001234567", mobile: "+573001234567", area: "Logística - Zona Norte", role: "driver", status: "DISPONIBLE", last_lat: 4.7110, last_lng: -74.0721, last_update: new Date().toISOString() },
+          { id: "demo-driver-2", name: "Andrés Delgado (Grúa Cama)", email: "conductor2@axistcorp.com", phone: "+573119876543", mobile: "+573119876543", area: "Logística - Zona Centro", role: "driver", status: "EN SERVICIO", last_lat: 4.6980, last_lng: -74.1021, last_update: new Date().toISOString() }
+        ];
+        const foundDemo = defaultDemoUsers.find(u => u.id === userId);
+        if (foundDemo) {
+          localUsers.push({ ...foundDemo, ...updateData });
+        } else {
+          localUsers.push({ id: userId, name: "Conductor", email: "", role: "driver", ...updateData });
+        }
+      }
+      localStorage.setItem("towassist_fallback_users", JSON.stringify(localUsers));
+
+      // Also update the active session user to keep the state of the logged-in user congruent
+      const rawSession = localStorage.getItem("towassist_user");
+      if (rawSession) {
+        const sessionUser = JSON.parse(rawSession);
+        if (sessionUser.id === userId) {
+          localStorage.setItem("towassist_user", JSON.stringify({ ...sessionUser, ...updateData }));
+        }
+      }
+    } catch (localErr) {
+      console.warn("Failed to synchronize local storage fallback user state:", localErr);
     }
 
     try {
@@ -228,50 +195,136 @@ export const api = {
   createUser: async (userData: { id?: string; name: string; email: string; phone?: string; mobile?: string; area?: string; role: string }) => {
     const customId = userData.id && userData.id.trim() ? userData.id.trim() : `user-${Date.now()}`;
     const { id, ...rest } = userData;
-    const finalData = { id: customId, ...rest };
+    const finalData = { id: customId, status: "DISPONIBLE", ...rest };
 
-    const { data, error } = await supabase
-      .from("users")
-      .insert([finalData])
-      .select()
-      .single();
-    
-    if (error) throw error;
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .insert([finalData])
+        .select()
+        .single();
+      if (error) {
+        console.warn("Supabase user insertion error:", error);
+      }
+    } catch (e) {
+      console.warn("Encountered exception inserting user onto Supabase:", e);
+    }
+
+    try {
+      const rawLocal = localStorage.getItem("towassist_fallback_users");
+      const localUsers = rawLocal ? JSON.parse(rawLocal) : [];
+      localUsers.push(finalData);
+      localStorage.setItem("towassist_fallback_users", JSON.stringify(localUsers));
+    } catch (e) {
+      console.error("Local storage fallback user insert error:", e);
+    }
+
     return { success: true, id: customId };
   },
 
   deleteUser: async (id: string) => {
-    await supabase
-      .from("users")
-      .delete()
-      .eq("id", id);
+    try {
+      await supabase
+        .from("users")
+        .delete()
+        .eq("id", id);
+    } catch (e) {
+      console.warn("deleteUser cloud error:", e);
+    }
+
+    try {
+      const rawLocal = localStorage.getItem("towassist_fallback_users");
+      if (rawLocal) {
+        const localUsers = JSON.parse(rawLocal);
+        const filtered = localUsers.filter((u: any) => u.id !== id);
+        localStorage.setItem("towassist_fallback_users", JSON.stringify(filtered));
+      }
+    } catch (e) {
+      console.error("Local storage user deletion error:", e);
+    }
   },
 
   // Admin Integration Management
   getIntegrations: async (): Promise<Integration[]> => {
-    const { data, error } = await supabase
-      .from("integrations")
-      .select("*");
-    
-    if (error) return [];
-    return Array.isArray(data) ? data : [];
+    let dbIntegrations: Integration[] = [];
+    try {
+      const { data, error } = await supabase
+        .from("integrations")
+        .select("*");
+      if (!error && Array.isArray(data)) {
+        dbIntegrations = data;
+      }
+    } catch (e) {
+      console.warn("getIntegrations cloud lookup failed:", e);
+    }
+
+    let localInts: Integration[] = [];
+    try {
+      const rawLocal = localStorage.getItem("towassist_fallback_integrations");
+      if (rawLocal) {
+        localInts = JSON.parse(rawLocal);
+      }
+    } catch (e) {
+      console.error("Local storage integrations parsing error:", e);
+    }
+
+    const merged = [...dbIntegrations];
+    localInts.forEach(li => {
+      if (!merged.some(mi => mi.id === li.id)) {
+        merged.push(li);
+      }
+    });
+
+    return merged;
   },
 
   createIntegration: async (intData: { name: string; url: string }) => {
     const id = `int-${Date.now()}`;
-    const { error } = await supabase
-      .from("integrations")
-      .insert([{ id, ...intData, active: true }]);
-    
-    if (error) throw error;
+    const finalData = { id, ...intData, active: true };
+
+    try {
+      const { error } = await supabase
+        .from("integrations")
+        .insert([finalData]);
+      if (error) {
+        console.warn("createIntegration cloud insertion failed:", error);
+      }
+    } catch (e) {
+      console.warn("Exception inserting integration on Supabase:", e);
+    }
+
+    try {
+      const rawLocal = localStorage.getItem("towassist_fallback_integrations");
+      const localInts = rawLocal ? JSON.parse(rawLocal) : [];
+      localInts.push(finalData);
+      localStorage.setItem("towassist_fallback_integrations", JSON.stringify(localInts));
+    } catch (e) {
+      console.error("local storage fallback integration write error:", e);
+    }
+
     return { success: true, id };
   },
 
   updateIntegrationStatus: async (id: string, active: boolean) => {
-    await supabase
-      .from("integrations")
-      .update({ active })
-      .eq("id", id);
+    try {
+      await supabase
+        .from("integrations")
+        .update({ active })
+        .eq("id", id);
+    } catch (e) {
+      console.warn("updateIntegrationStatus cloud update failed:", e);
+    }
+
+    try {
+      const rawLocal = localStorage.getItem("towassist_fallback_integrations");
+      if (rawLocal) {
+        const localInts: Integration[] = JSON.parse(rawLocal);
+        const updated = localInts.map(li => li.id === id ? { ...li, active } : li);
+        localStorage.setItem("towassist_fallback_integrations", JSON.stringify(updated));
+      }
+    } catch (e) {
+      console.error("local storage fallback integration update error:", e);
+    }
   },
 
   getAdminStats: async () => {

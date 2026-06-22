@@ -9,8 +9,8 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
-  const distPath = path.join(__dirname, "dist");
+  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+  const distPath = path.join(process.cwd(), "dist");
   
   // Prioridad: 
   // 1. Si NODE_ENV es production
