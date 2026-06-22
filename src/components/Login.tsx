@@ -118,6 +118,48 @@ export default function Login({ onLogin }: LoginProps) {
           </button>
         </form>
 
+        {/* Demo Quick Access */}
+        <div className="mt-8 pt-6 border-t border-slate-100">
+          <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 text-center">
+            Accesos Rápidos Consola
+          </label>
+          <div className="grid grid-cols-1 gap-2">
+            <button
+              type="button"
+              onClick={() => { setEmail("admin@axistcorp.com"); }}
+              className="w-full text-left bg-slate-50 hover:bg-blue-50 hover:border-blue-200 border border-slate-150 rounded-xl p-3 flex justify-between items-center transition-all cursor-pointer"
+            >
+              <div>
+                <span className="text-xs font-black text-slate-800 uppercase tracking-wide">Administración</span>
+                <p className="text-[10px] text-slate-400 font-medium font-mono">admin@axistcorp.com</p>
+              </div>
+              <span className="text-[9px] font-black bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full uppercase">Seleccionar</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setEmail("callcenter@axistcorp.com"); }}
+              className="w-full text-left bg-slate-50 hover:bg-blue-50 hover:border-blue-200 border border-slate-150 rounded-xl p-3 flex justify-between items-center transition-all cursor-pointer"
+            >
+              <div>
+                <span className="text-xs font-black text-slate-800 uppercase tracking-wide">Call Center / Mapa GPS</span>
+                <p className="text-[10px] text-slate-400 font-medium font-mono">callcenter@axistcorp.com</p>
+              </div>
+              <span className="text-[9px] font-black bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full uppercase">Seleccionar</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setEmail("conductor@axistcorp.com"); }}
+              className="w-full text-left bg-slate-50 hover:bg-blue-50 hover:border-blue-200 border border-slate-150 rounded-xl p-3 flex justify-between items-center transition-all cursor-pointer"
+            >
+              <div>
+                <span className="text-xs font-black text-slate-800 uppercase tracking-wide">Conductor (Fijo GPS 1)</span>
+                <p className="text-[10px] text-slate-400 font-medium font-mono">conductor@axistcorp.com</p>
+              </div>
+              <span className="text-[9px] font-black bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full uppercase">Seleccionar</span>
+            </button>
+          </div>
+        </div>
+
         <div className="mt-10 pt-8 border-t border-slate-50 space-y-4">
           {deferredPrompt && (
             <button 
