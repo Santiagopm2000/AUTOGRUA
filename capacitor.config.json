@@ -1,0 +1,6 @@
+{
+  "appId": "com.axistcorp.autogrua",
+  "appName": "Axistcorp",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { User, Integration } from "../types";
+import { User, Integration, Service, ServiceStatus } from "../types";
 import { api } from "../services/api";
 import { 
   Users, 
@@ -8,7 +8,12 @@ import {
   RefreshCcw,
   Clock,
   MessageSquare,
-  ExternalLink
+  ExternalLink,
+  Plus,
+  ClipboardList,
+  CheckCircle,
+  AlertCircle,
+  Phone
 } from "lucide-react";
 import { motion } from "motion/react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
@@ -48,21 +53,79 @@ export default function CallCenterDashboard() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [stats, setStats] = useState({ activeDrivers: 0, inService: 0 });
   const [loading, setLoading] = useState(true);
+  const [services, setServices] = useState<Service[]>([]);
+  const [activeTab, setActiveTab] = useState<'drivers' | 'services'>('drivers');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [savingService, setSavingService] = useState(false);
+  const [newService, setNewService] = useState({
+    driver_id: '',
+    client_name: '',
+    client_phone: '',
+    vehicle_info: '',
+    origin_address: '',
+    destination_address: ''
+  });
 
   const fetchData = async () => {
     try {
-      const [driversData, statsData, integrationsData] = await Promise.all([
+      const [driversData, statsData, integrationsData, servicesData] = await Promise.all([
         api.getDrivers(),
         api.getAdminStats(),
-        api.getIntegrations()
+        api.getIntegrations(),
+        api.getServices()
       ]);
-      setDrivers(driversData);
-      setStats(statsData);
-      setIntegrations(integrationsData.filter(i => i.active));
+      setDrivers(driversData || []);
+      setStats(statsData || { activeDrivers: 0, inService: 0 });
+      setIntegrations((integrationsData || []).filter(i => i.active));
+      setServices(servicesData || []);
     } catch (error) {
       console.error("Error fetching monitoring data:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateServiceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newService.client_name || !newService.vehicle_info || !newService.origin_address) {
+      alert("Por favor completa los campos obligatorios (Nombre, Vehículo, Origen)");
+      return;
+    }
+    setSavingService(true);
+    try {
+      await api.createService({
+        driver_id: newService.driver_id || null,
+        client_name: newService.client_name,
+        client_phone: newService.client_phone || undefined,
+        vehicle_info: newService.vehicle_info,
+        origin_address: newService.origin_address,
+        destination_address: newService.destination_address || undefined
+      });
+      
+      // Reset form
+      setNewService({
+        driver_id: '',
+        client_name: '',
+        client_phone: '',
+        vehicle_info: '',
+        origin_address: '',
+        destination_address: ''
+      });
+      setShowCreateModal(false);
+      fetchData();
+    } catch (err) {
+      console.error("Error creating service:", err);
+    } finally {
+      setSavingService(false);
+    }
+  };
+
+  const handleOperatorCancelService = async (serviceId: string) => {
+    try {
+      await api.updateServiceStatus(serviceId, 'CANCELADO');
+      fetchData();
+    } catch (err) {
+      console.error("Error canceling service:", err);
     }
   };
 
@@ -211,44 +274,245 @@ export default function CallCenterDashboard() {
           </MapContainer>
         </div>
 
-        {/* Driver List with Timers */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-6 overflow-y-auto max-h-[600px] shadow-sm">
-          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-6 flex items-center gap-2">
-            <Users className="w-4 h-4" /> Unidades en Campo
-          </h3>
-          <div className="space-y-4">
-            {Array.isArray(drivers) && drivers.map(driver => (
-              <div key={driver.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 hover:border-blue-200 transition-all group">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${getStatusColor(driver.status)}`} />
-                    <p className="font-bold text-sm text-slate-900">{driver.name}</p>
-                  </div>
-                  <span className="text-[10px] font-mono text-slate-500 bg-white border border-slate-100 px-2 py-1 rounded-md">
-                    {formatElapsed(driver.status_start_time)}
+        {/* Right Sidebar: Controls & Dispatch */}
+        <div className="flex flex-col gap-6">
+          {/* Dispatch Button */}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 px-6 rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg shadow-blue-600/20 text-xs uppercase tracking-wider"
+          >
+            <Plus className="w-5 h-5" /> Despachar Servicio / Auxilio
+          </button>
+
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex-1 min-h-[500px] flex flex-col">
+            {/* Tabs */}
+            <div className="flex bg-slate-100 p-1 rounded-2xl mb-6">
+              <button
+                onClick={() => setActiveTab('drivers')}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                  activeTab === 'drivers' 
+                    ? 'bg-white text-slate-900 shadow-sm' 
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <Users className="w-4 h-4" /> Unidades
+              </button>
+              <button
+                onClick={() => setActiveTab('services')}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all relative ${
+                  activeTab === 'services' 
+                    ? 'bg-white text-slate-900 shadow-sm' 
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <ClipboardList className="w-4 h-4" /> Servicios
+                {services.filter(s => s.status === 'PENDIENTE' || s.status === 'EN_CAMINO').length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-[9px] font-black">
+                    {services.filter(s => s.status === 'PENDIENTE' || s.status === 'EN_CAMINO').length}
                   </span>
-                </div>
-                
-                <div className="flex items-center justify-between text-[10px] uppercase tracking-widest font-black text-slate-400 mb-4">
-                  <span>{driver.status}</span>
-                  {driver.last_lat && (
-                    <span className="flex items-center gap-1 text-emerald-500">
-                      <MapIcon className="w-3 h-3" /> GPS OK
-                    </span>
+                )}
+              </button>
+            </div>
+
+            {/* Tab content */}
+            <div className="flex-1 overflow-y-auto max-h-[500px] pr-1">
+              {activeTab === 'drivers' ? (
+                <div className="space-y-4">
+                  {drivers.length === 0 ? (
+                    <div className="text-center py-10 text-slate-400">
+                      <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                      <p className="text-xs font-bold">No hay conductores registrados</p>
+                    </div>
+                  ) : (
+                    drivers.map(driver => (
+                      <div key={driver.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 hover:border-blue-200 transition-all group">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(driver.status)}`} />
+                            <p className="font-extrabold text-sm text-slate-800 tracking-tight leading-none">{driver.name}</p>
+                          </div>
+                          <span className="text-[10px] font-mono text-slate-500 bg-white border border-slate-100 px-2 py-0.5 rounded-md font-bold font-mono">
+                            {formatElapsed(driver.status_start_time)}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center justify-between text-[10px] uppercase font-black text-slate-400 mb-3 tracking-wider">
+                          <span>{driver.status}</span>
+                          {driver.last_lat && (
+                            <span className="flex items-center gap-1 text-emerald-500 font-bold">
+                              <MapIcon className="w-3 h-3" /> GPS OK
+                            </span>
+                          )}
+                        </div>
+
+                        <button 
+                          onClick={() => handleWhatsApp(driver)}
+                          className="w-full bg-white border border-slate-200 hover:border-emerald-500 hover:text-emerald-600 text-slate-600 py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 font-black text-[10px] uppercase tracking-widest"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
+                        </button>
+                      </div>
+                    ))
                   )}
                 </div>
+              ) : (
+                <div className="space-y-4">
+                  {services.filter(s => s.status === 'PENDIENTE' || s.status === 'EN_CAMINO').length === 0 ? (
+                    <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <ClipboardList className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-xs font-bold">No hay servicios en curso</p>
+                      <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-wider">Despacha una emergencia para iniciar</p>
+                    </div>
+                  ) : (
+                    services.filter(s => s.status === 'PENDIENTE' || s.status === 'EN_CAMINO').map(srv => {
+                      const assignedDriver = drivers.find(d => d.id === srv.driver_id);
+                      return (
+                        <div key={srv.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 hover:border-blue-200 transition-all">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-md mr-1.5 ${
+                                srv.status === 'EN_CAMINO' ? "bg-blue-600 text-white" : "bg-amber-100 text-amber-700"
+                              }`}>
+                                {srv.status === 'EN_CAMINO' ? "EN CAMINO" : "PENDIENTE"}
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-400 font-bold">Ref: {srv.id.slice(0, 6).toUpperCase()}</span>
+                            </div>
+                            <span className="text-[10px] font-semibold text-slate-400">
+                              {new Date(srv.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
 
-                <button 
-                  onClick={() => handleWhatsApp(driver)}
-                  className="w-full bg-white border border-slate-200 hover:border-emerald-500 hover:text-emerald-600 text-slate-600 py-3 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 font-black text-[10px] uppercase tracking-widest"
-                >
-                  <MessageSquare className="w-4 h-4" /> Contactar WhatsApp
-                </button>
-              </div>
-            ))}
+                          <div className="text-xs space-y-1 mb-3 text-slate-600 font-medium">
+                            <p><span className="text-slate-400 font-bold uppercase text-[9px] block">Cliente</span> {srv.client_name}</p>
+                            {srv.client_phone && <p><span className="text-slate-400 font-bold uppercase text-[9px] block">Teléfono</span> {srv.client_phone}</p>}
+                            <p><span className="text-slate-400 font-bold uppercase text-[9px] block">Vehículo</span> {srv.vehicle_info}</p>
+                            <p><span className="text-slate-400 font-bold uppercase text-[9px] block">Origen</span> {srv.origin_address}</p>
+                            <p><span className="text-slate-400 font-bold uppercase text-[9px] block">Conductor</span> {assignedDriver ? assignedDriver.name : "Sin asignar"}</p>
+                          </div>
+
+                          <button
+                            onClick={() => handleOperatorCancelService(srv.id)}
+                            className="w-full bg-red-50 hover:bg-red-100 text-red-600 py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all font-black text-[10px] uppercase tracking-widest"
+                          >
+                            <AlertCircle className="w-3.5 h-3.5" /> Cancelar Servicio
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Create Emergency Service Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-[999] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-lg w-full p-8 md:p-10 relative overflow-y-auto max-h-[90%] border border-slate-100 animate-in fade-in zoom-in duration-200">
+            <div className="mb-6">
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Despachar Grúa / Auxilio</h3>
+              <p className="text-xs text-slate-400 uppercase tracking-widest font-black mt-1">Registrar nueva emergencia en tiempo real</p>
+            </div>
+
+            <form onSubmit={handleCreateServiceSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Nombre del Cliente *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej: Juan Pérez"
+                  value={newService.client_name}
+                  onChange={(e) => setNewService({ ...newService, client_name: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-600 transition-colors"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Teléfono del Cliente</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: +57312345678"
+                    value={newService.client_phone}
+                    onChange={(e) => setNewService({ ...newService, client_phone: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-600 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Vehículo (Info Completa) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej: Chevrolet Sail Gris, Placa XYZ-456"
+                    value={newService.vehicle_info}
+                    onChange={(e) => setNewService({ ...newService, vehicle_info: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-600 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Dirección de Origen (Recogida) *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej: Cl 85 # 15-40, Bogotá"
+                  value={newService.origin_address}
+                  onChange={(e) => setNewService({ ...newService, origin_address: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-600 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Dirección de Destino (Taller/Destino)</label>
+                <input
+                  type="text"
+                  placeholder="Ej: Av Cl 100 # 22-10 (Taller Autorizado)"
+                  value={newService.destination_address}
+                  onChange={(e) => setNewService({ ...newService, destination_address: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-600 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Asignar Operario / Conductor *</label>
+                <select
+                  required
+                  value={newService.driver_id}
+                  onChange={(e) => setNewService({ ...newService, driver_id: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:border-blue-600 transition-colors"
+                >
+                  <option value="">Selecciona un conductor disponible...</option>
+                  {drivers.map(d => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} ({d.status})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="flex-1 border border-slate-200 text-slate-500 font-bold py-4 rounded-2xl text-xs uppercase tracking-wider hover:bg-slate-50 active:scale-95 transition-transform"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingService}
+                  className="flex-1 bg-blue-600 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-wider hover:bg-blue-700 active:scale-95 transition-transform disabled:bg-blue-400 flex items-center justify-center gap-1"
+                >
+                  {savingService ? "Despachando..." : "Proceder Despacho"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

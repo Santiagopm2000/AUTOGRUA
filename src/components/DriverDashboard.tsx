@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { User, UserStatus } from "../types";
+import { User, UserStatus, Service, ServiceStatus } from "../types";
 import { api } from "../services/api";
 import { 
   MapPin, 
@@ -8,7 +8,13 @@ import {
   Wrench,
   Truck,
   LogOut,
-  Play
+  Play,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Navigation,
+  MessageSquare,
+  Phone
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { clsx, type ClassValue } from "clsx";
@@ -35,6 +41,56 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
   const [geoError, setGeoError] = useState<string | null>(null);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [assignedServices, setAssignedServices] = useState<Service[]>([]);
+  const [loadingServices, setLoadingServices] = useState(true);
+
+  const fetchCurrentServices = useCallback(async () => {
+    try {
+      const all = await api.getServices();
+      const filtered = all.filter(s => s.driver_id === user.id && (s.status === 'PENDIENTE' || s.status === 'EN_CAMINO'));
+      setAssignedServices(filtered);
+    } catch (e) {
+      console.warn("Error fetching assigned services", e);
+    } finally {
+      setLoadingServices(false);
+    }
+  }, [user.id]);
+
+  useEffect(() => {
+    fetchCurrentServices();
+    const interval = setInterval(fetchCurrentServices, 8000);
+    return () => clearInterval(interval);
+  }, [fetchCurrentServices]);
+
+  const handleStartService = async (serviceId: string) => {
+    try {
+      await api.updateServiceStatus(serviceId, 'EN_CAMINO');
+      await handleStatusChange('EN SERVICIO');
+      await fetchCurrentServices();
+    } catch (e) {
+      console.error("Error starting service:", e);
+    }
+  };
+
+  const handleCompleteService = async (serviceId: string) => {
+    try {
+      await api.updateServiceStatus(serviceId, 'COMPLETADO');
+      await handleStatusChange('DISPONIBLE');
+      await fetchCurrentServices();
+    } catch (e) {
+      console.error("Error completing service:", e);
+    }
+  };
+
+  const handleCancelService = async (serviceId: string) => {
+    try {
+      await api.updateServiceStatus(serviceId, 'CANCELADO');
+      await handleStatusChange('DISPONIBLE');
+      await fetchCurrentServices();
+    } catch (e) {
+      console.error("Error canceling service:", e);
+    }
+  };
 
   // Check for existing permission and listen for install prompt
   useEffect(() => {
@@ -266,6 +322,115 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
             );
           })}
         </div>
+      </section>
+
+      {/* Servicios de Auxilio Asignados */}
+      <section className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm">
+        <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-6">
+          Servicios de Auxilio Asignados
+        </h2>
+
+        {loadingServices ? (
+          <div className="flex justify-center items-center py-6">
+            <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs text-slate-400 font-bold ml-2">Cargando servicios asignados...</span>
+          </div>
+        ) : assignedServices.length === 0 ? (
+          <div className="text-center py-10 bg-slate-50 rounded-[2rem] border border-dashed border-slate-200">
+            <AlertCircle className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+            <p className="text-sm font-bold text-slate-500">No tienes servicios asignados</p>
+            <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">El Call Center te notificará si surge una emergencia</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {assignedServices.map((srv) => (
+              <motion.div 
+                key={srv.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={cn(
+                  "p-6 rounded-[2rem] border transition-all",
+                  srv.status === 'EN_CAMINO' ? "border-blue-200 bg-blue-50/50" : "border-slate-150 bg-white"
+                )}
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <span className={cn(
+                      "text-[9px] font-black uppercase px-2 py-1 rounded-md tracking-wider mr-2",
+                      srv.status === 'EN_CAMINO' ? "bg-blue-600 text-white" : "bg-amber-100 text-amber-700"
+                    )}>
+                      {srv.status === 'EN_CAMINO' ? "EN CAMINO" : "PENDIENTE"}
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400 font-bold">Ref: {srv.id.slice(0, 8).toUpperCase()}</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-semibold">{new Date(srv.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                </div>
+
+                <div className="space-y-3 mb-6">
+                  <div>
+                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Cliente</h4>
+                    <p className="text-sm font-bold text-slate-800">{srv.client_name}</p>
+                    {srv.client_phone && (
+                      <div className="flex gap-2 mt-1">
+                        <a href={`tel:${srv.client_phone}`} className="flex items-center gap-1 text-[11px] font-black text-slate-500 bg-slate-100 hover:bg-slate-200 px-3 py-1 rounded-xl transition-colors">
+                          <Phone className="w-3 h-3" /> Llamar
+                        </a>
+                        <a href={`https://wa.me/${srv.client_phone.replace('+', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[11px] font-black text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1 rounded-xl transition-colors">
+                          <MessageSquare className="w-3 h-3" /> WhatsApp
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Vehículo</h4>
+                    <p className="text-sm font-bold text-slate-700">{srv.vehicle_info}</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+                    <div>
+                      <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Recogida (Origen)</h4>
+                      <p className="text-xs text-slate-600 font-medium">{srv.origin_address}</p>
+                    </div>
+                    {srv.destination_address && (
+                      <div>
+                        <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Destino</h4>
+                        <p className="text-xs text-slate-600 font-medium">{srv.destination_address}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Acciones */}
+                <div className="flex flex-col sm:flex-row gap-2">
+                  {srv.status === 'PENDIENTE' ? (
+                    <button
+                      onClick={() => handleStartService(srv.id)}
+                      className="flex-1 bg-blue-600 text-white py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Navigation className="w-4 h-4" /> Aceptar y En Camino
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleCompleteService(srv.id)}
+                        className="flex-1 bg-emerald-600 text-white py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+                      >
+                        <CheckCircle className="w-4 h-4" /> Finalizar Servicio
+                      </button>
+                      <button
+                        onClick={() => handleCancelService(srv.id)}
+                        className="bg-red-50 text-red-600 py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-wider hover:bg-red-100 active:scale-95 transition-all flex items-center justify-center gap-1"
+                      >
+                        <XCircle className="w-4 h-4" /> Cancelar
+                      </button>
+                    </>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Location Status */}

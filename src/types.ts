@@ -6,6 +6,8 @@ export interface User {
   name: string;
   email: string;
   phone?: string;
+  mobile?: string;
+  area?: string;
   role: UserRole;
   status: UserStatus;
   status_start_time?: string;
@@ -20,4 +22,31 @@ export interface Integration {
   name: string;
   url: string;
   active: boolean;
+}
+
+export interface DriverStatusLog {
+  id: number;
+  driver_id: string;
+  driver_name?: string;
+  previous_status?: UserStatus | null;
+  new_status: UserStatus;
+  changed_at: string;
+  duration_seconds?: number | null;
+}
+
+export type ServiceStatus = 'PENDIENTE' | 'EN_CAMINO' | 'COMPLETADO' | 'CANCELADO';
+
+export interface Service {
+  id: string;
+  driver_id: string | null;
+  driver_name?: string;
+  client_name: string;
+  client_phone?: string;
+  vehicle_info: string;
+  origin_address: string;
+  destination_address?: string;
+  status: ServiceStatus;
+  created_at: string;
+  updated_at: string;
+  duration_seconds?: number | null;
 }
