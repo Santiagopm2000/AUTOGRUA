@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { User, Integration } from "../types";
+import { User, Integration, UserStatus } from "../types";
 import { api } from "../services/api";
 import { supabase } from "../services/supabase";
 import { 
@@ -18,7 +18,8 @@ import {
   AlertTriangle,
   Info,
   Clock,
-  ClipboardList
+  ClipboardList,
+  PowerOff
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -163,6 +164,28 @@ export default function AdminDashboard() {
       await api.deleteUser(id);
       showNotification(`Usuario eliminado de los registros. Sincronizando...`, "success");
       fetchData();
+    }
+  };
+
+  const forceEndShift = async (userId: string, userName: string) => {
+    if (confirm(`¿Estás seguro de que deseas tumbar el turno de ${userName} y desconectarlo?`)) {
+      try {
+        await api.updateStatus(userId, "TERMINE TURNO");
+        showNotification(`Turno de ${userName} finalizado por administración.`, "success");
+        fetchData();
+      } catch (err) {
+        showNotification("No se pudo actualizar el estado del conductor.", "error");
+      }
+    }
+  };
+
+  const changeUserStatus = async (userId: string, newStatus: UserStatus, userName: string) => {
+    try {
+      await api.updateStatus(userId, newStatus);
+      showNotification(`Estado de ${userName} cambiado a ${newStatus} por administración.`, "success");
+      fetchData();
+    } catch (err) {
+      showNotification("No se pudo cambiar el estado del conductor.", "error");
     }
   };
 
@@ -522,6 +545,38 @@ ON CONFLICT (id) DO UPDATE SET
                         <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span> {user.status || "DISPONIBLE"}
                       </span>
                     </div>
+
+                    {user.role === 'driver' && (
+                      <div className="col-span-2 sm:col-span-3 border-t border-slate-100 pt-3 mt-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-rose-50/20 p-2.5 rounded-lg border border-dashed border-rose-100/50">
+                        <div>
+                          <span className="text-[8px] uppercase font-black text-slate-400 block tracking-wider mb-0.5">Control de Conexión</span>
+                          <span className="text-[10px] text-slate-600 font-bold leading-none">Forzar cambio de estado</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {user.status !== 'TERMINE TURNO' ? (
+                            <button
+                              onClick={() => forceEndShift(user.id, user.name)}
+                              className="bg-rose-100 hover:bg-rose-200 text-rose-700 text-[9px] font-black uppercase tracking-wider px-3 py-1.5 rounded-xl border border-rose-200 transition-all active:scale-95 flex items-center gap-1.5 shadow-sm"
+                              title="Forzar fin de turno (Desconectar)"
+                            >
+                              <PowerOff className="w-3.5 h-3.5" /> Desconectar / Fin Turno
+                            </button>
+                          ) : (
+                            <span className="text-[9px] bg-slate-100 text-slate-400 font-black uppercase px-2.5 py-1.5 rounded-xl border border-slate-200">Turno Terminado</span>
+                          )}
+                          <select
+                            value={user.status || "DISPONIBLE"}
+                            onChange={(e) => changeUserStatus(user.id, e.target.value as UserStatus, user.name)}
+                            className="bg-white border border-slate-200 text-slate-700 text-[10px] font-black uppercase px-2 py-1.5 rounded-xl outline-none focus:border-blue-600 cursor-pointer shadow-sm"
+                          >
+                            <option value="DISPONIBLE">🟢 DISPONIBLE</option>
+                            <option value="EN SERVICIO">🟡 EN SERVICIO</option>
+                            <option value="MANTENIMIENTO">🟠 MANTENIMIENTO</option>
+                            <option value="TERMINE TURNO">🔴 TERMINE TURNO</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))
