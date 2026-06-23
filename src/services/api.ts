@@ -239,9 +239,28 @@ export const api = {
           last_update: user.last_update || new Date().toISOString()
         };
 
-        const { error } = await supabase.from("users").upsert([cleanUser]);
+        const { data: existingUserById, error: idCheckError } = await supabase
+          .from("users")
+          .select("id")
+          .eq("id", cleanUser.id)
+          .maybeSingle();
+
+        let error = null;
+        if (!idCheckError && existingUserById) {
+          const { error: updateErr } = await supabase
+            .from("users")
+            .update(cleanUser)
+            .eq("id", cleanUser.id);
+          error = updateErr;
+        } else {
+          const { error: insertErr } = await supabase
+            .from("users")
+            .insert([cleanUser]);
+          error = insertErr;
+        }
+
         if (!error) syncedUsersCount++;
-        else console.warn("[SYNC] Error saving user to database:", user.id, error);
+        else console.warn("[SYNC] Error saving user to database:", cleanUser.id, error);
       }
     } catch (e) {
       console.warn("Users sync warning:", e);
@@ -357,12 +376,26 @@ export const api = {
         };
       }
 
-      // 2. Realizar inserción de datos limpios
-      const { data, error } = await supabase
+      // 2. Realizar inserción de datos limpios de manera altamente resiliente
+      const { data: existingUserById, error: idCheckError } = await supabase
         .from("users")
-        .upsert([finalData])
-        .select()
+        .select("id")
+        .eq("id", cleanId)
         .maybeSingle();
+
+      let error = null;
+      if (!idCheckError && existingUserById) {
+        const { error: updateErr } = await supabase
+          .from("users")
+          .update(finalData)
+          .eq("id", cleanId);
+        error = updateErr;
+      } else {
+        const { error: insertErr } = await supabase
+          .from("users")
+          .insert([finalData]);
+        error = insertErr;
+      }
       
       if (error) {
         console.warn("Supabase user insertion error:", error);

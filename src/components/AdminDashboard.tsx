@@ -51,6 +51,7 @@ export default function AdminDashboard() {
 
   // Dynamic feedback and alerts state
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "warning"; show: boolean }>({ message: "", type: "success", show: false });
+  const [showSqlTroubleshooter, setShowSqlTroubleshooter] = useState(false);
 
   const showNotification = (message: string, type: "success" | "error" | "warning" = "success") => {
     setNotification({ message, type, show: true });
@@ -288,6 +289,108 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* Guía Interactiva de Estructura de Tablas en Supabase */}
+      <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="bg-blue-50 text-blue-600 p-2.5 rounded-2xl border border-blue-100 mt-0.5">
+              <Database className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">🛠️ Guía de Estructura de Tablas en Supabase</h3>
+              <p className="text-[11px] text-slate-500 font-semibold leading-snug">¿Falta alguna columna o hay errores de guardado? Restablece o crea tu tabla "users" correctamente.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowSqlTroubleshooter(!showSqlTroubleshooter)}
+            className="text-[10px] bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl font-bold transition-all uppercase tracking-wider whitespace-nowrap active:scale-95 shadow-md"
+          >
+            {showSqlTroubleshooter ? "Ocultar Guía SQL" : "Ver Instrucciones SQL"}
+          </button>
+        </div>
+
+        {showSqlTroubleshooter && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }} 
+            animate={{ opacity: 1, height: "auto" }} 
+            className="pt-4 border-t border-slate-200 space-y-4 text-xs"
+          >
+            <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-2xl text-slate-700 leading-relaxed font-medium">
+              Si creaste la tabla manually o no se están guardando los 5 registros iniciales, es probable que la base de datos no tenga las 13 columnas completas. Para solucionarlo de inmediato y asegurar el funcionamiento al 100%:
+            </div>
+            
+            <ol className="list-decimal list-inside text-slate-600 font-semibold space-y-2">
+              <li>Ingresa al Panel de <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Supabase Dashboard</a>.</li>
+              <li>Entra a tu proyecto ➡️ sección <strong>SQL Editor</strong> en el menú lateral izquierdo.</li>
+              <li>Crea una consulta con <strong>New Query</strong>, pega el script de abajo y presiona <strong>Run</strong>.</li>
+            </ol>
+
+            <div className="relative mt-2">
+              <div className="absolute right-3 top-3 z-10">
+                <button
+                  onClick={() => {
+                    const sqlCode = `-- 1. Limpieza de tablas existentes en orden jerárquico\nDROP TABLE IF EXISTS gps_logs CASCADE;\nDROP TABLE IF EXISTS services CASCADE;\nDROP TABLE IF EXISTS integrations CASCADE;\nDROP TABLE IF EXISTS driver_status_logs CASCADE;\nDROP TABLE IF EXISTS users CASCADE;\n\n-- 2. Creación de la Tabla de Usuarios con las 13 columnas necesarias\nCREATE TABLE users (\n    id TEXT PRIMARY KEY,\n    name TEXT NOT NULL,\n    email TEXT NOT NULL UNIQUE,\n    phone TEXT,\n    mobile TEXT,\n    area TEXT,\n    role TEXT NOT NULL DEFAULT 'driver' CHECK (role IN ('admin', 'call_center', 'driver')),\n    status TEXT NOT NULL DEFAULT 'DISPONIBLE' CHECK (status IN ('DISPONIBLE', 'EN SERVICIO', 'MANTENIMIENTO', 'INACTIVO', 'TERMINE TURNO')),\n    status_start_time TIMESTAMPTZ DEFAULT NOW(),\n    shift_start_time TIMESTAMPTZ,\n    last_lat DOUBLE PRECISION,\n    last_lng DOUBLE PRECISION,\n    last_update TIMESTAMPTZ DEFAULT NOW()\n);\n\n-- 3. Deshabilitar RLS para permitir sincronización instantánea desde la app sin autenticación JWT\nALTER TABLE users DISABLE ROW LEVEL SECURITY;\n\n-- 4. Semillas iniciales (Los 5 registros vitales de administración y demostración)\nINSERT INTO users (id, name, email, phone, mobile, area, role, status)\nVALUES \n  ('user-px6', 'Usuario Creador (Admin)', 'px6.usa@gmail.com', '+573100000000', '+573100000000', 'Administración / Sistemas', 'admin', 'DISPONIBLE'),\n  ('demo-admin', 'Administrador Axistcorp', 'admin@axistcorp.com', '+573000000000', '+573000000000', 'Gerencia / Tecnología', 'admin', 'DISPONIBLE'),\n  ('demo-call-center', 'Operador Call Center', 'callcenter@axistcorp.com', '+573111111111', '+573111111111', 'Despacho / Call Center', 'call_center', 'DISPONIBLE'),\n  ('demo-driver-1', 'Carlos Mendoza (Grúa Camión)', 'conductor@axistcorp.com', '+573001234567', '+573001234567', 'Logística - Zona Norte', 'driver', 'DISPONIBLE'),\n  ('demo-driver-2', 'Andrés Delgado (Grúa Cama)', 'conductor2@axistcorp.com', '+573119876543', '+573119876543', 'Logística - Zona Centro', 'driver', 'EN SERVICIO')\nON CONFLICT (id) DO UPDATE SET\n  name = EXCLUDED.name,\n  email = EXCLUDED.email,\n  phone = EXCLUDED.phone,\n  mobile = EXCLUDED.mobile,\n  area = EXCLUDED.area,\n  role = EXCLUDED.role,\n  status = EXCLUDED.status;`;
+                    navigator.clipboard.writeText(sqlCode);
+                    showNotification("Script SQL copiado. ¡Pégalo en Supabase SQL Editor y ejecútalo!", "success");
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg shadow-md transition-all active:scale-95"
+                >
+                  Copiar Script SQL
+                </button>
+              </div>
+              <pre className="bg-slate-950 text-slate-300 p-4 rounded-2xl overflow-x-auto text-[10px] font-mono leading-relaxed max-h-60 shadow-inner pt-12">
+{`-- 1. Limpieza de tablas existentes en orden jerárquico
+DROP TABLE IF EXISTS gps_logs CASCADE;
+DROP TABLE IF EXISTS services CASCADE;
+DROP TABLE IF EXISTS integrations CASCADE;
+DROP TABLE IF EXISTS driver_status_logs CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
+-- 2. Creación de la Tabla de Usuarios con las 13 columnas necesarias
+CREATE TABLE users (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    phone TEXT,
+    mobile TEXT,
+    area TEXT,
+    role TEXT NOT NULL DEFAULT 'driver' CHECK (role IN ('admin', 'call_center', 'driver')),
+    status TEXT NOT NULL DEFAULT 'DISPONIBLE' CHECK (status IN ('DISPONIBLE', 'EN SERVICIO', 'MANTENIMIENTO', 'INACTIVO', 'TERMINE TURNO')),
+    status_start_time TIMESTAMPTZ DEFAULT NOW(),
+    shift_start_time TIMESTAMPTZ,
+    last_lat DOUBLE PRECISION,
+    last_lng DOUBLE PRECISION,
+    last_update TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. Deshabilitar RLS para permitir sincronización instantánea desde la app sin autenticación JWT
+ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+
+-- 4. Semillas iniciales (Los 5 registros vitales de administración y demostración)
+INSERT INTO users (id, name, email, phone, mobile, area, role, status)
+VALUES 
+  ('user-px6', 'Usuario Creador (Admin)', 'px6.usa@gmail.com', '+573100000000', '+573100000000', 'Administración / Sistemas', 'admin', 'DISPONIBLE'),
+  ('demo-admin', 'Administrador Axistcorp', 'admin@axistcorp.com', '+573000000000', '+573000000000', 'Gerencia / Tecnología', 'admin', 'DISPONIBLE'),
+  ('demo-call-center', 'Operador Call Center', 'callcenter@axistcorp.com', '+573111111111', '+573111111111', 'Despacho / Call Center', 'call_center', 'DISPONIBLE'),
+  ('demo-driver-1', 'Carlos Mendoza (Grúa Camión)', 'conductor@axistcorp.com', '+573001234567', '+573001234567', 'Logística - Zona Norte', 'driver', 'DISPONIBLE'),
+  ('demo-driver-2', 'Andrés Delgado (Grúa Cama)', 'conductor2@axistcorp.com', '+573119876543', '+573119876543', 'Logística - Zona Centro', 'driver', 'EN SERVICIO')
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  email = EXCLUDED.email,
+  phone = EXCLUDED.phone,
+  mobile = EXCLUDED.mobile,
+  area = EXCLUDED.area,
+  role = EXCLUDED.role,
+  status = EXCLUDED.status;`}
+              </pre>
+            </div>
+            <p className="text-[10px] text-slate-400 font-bold italic leading-normal">
+              * Nota Importante: La deshabilitación de Row Level Security (RLS) en Supabase es crucial para permitir que la aplicación se conecte de forma directa y sincronice usuarios en tiempo real sin obligarte a pasar por complejas autenticaciones JWT de correo.
+            </p>
+          </motion.div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Share Section */}
