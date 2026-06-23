@@ -193,14 +193,49 @@ export const api = {
 
   // Admin User Management
   createUser: async (userData: { id?: string; name: string; email: string; phone?: string; mobile?: string; area?: string; role: string }) => {
-    const customId = userData.id && userData.id.trim() ? userData.id.trim() : `user-${Date.now()}`;
-    const { id, ...rest } = userData;
-    const finalData = { id: customId, status: "DISPONIBLE", ...rest };
+    const cleanId = userData.id && userData.id.trim() ? userData.id.trim() : `user-${Date.now()}`;
+    const cleanEmail = userData.email ? userData.email.toLowerCase().trim() : "";
+    const cleanName = userData.name ? userData.name.trim() : "";
+    const cleanPhone = userData.phone && userData.phone.trim() ? userData.phone.trim() : null;
+    const cleanMobile = userData.mobile && userData.mobile.trim() ? userData.mobile.trim() : null;
+    const cleanArea = userData.area && userData.area.trim() ? userData.area.trim() : null;
+    const cleanRole = userData.role ? userData.role.trim() : "driver";
+
+    if (!cleanName || !cleanEmail) {
+      return { success: false, id: "", error: "El Nombre y el Correo de Acceso son requeridos." };
+    }
+
+    const finalData = {
+      id: cleanId,
+      name: cleanName,
+      email: cleanEmail,
+      phone: cleanPhone,
+      mobile: cleanMobile,
+      area: cleanArea,
+      role: cleanRole,
+      status: "DISPONIBLE"
+    };
 
     let dbSuccess = false;
     let dbErrorMessage = "";
 
     try {
+      // 1. Evitar violación de restricción UNIQUE en email verificando antes en la base de datos
+      const { data: existingUser, error: checkError } = await supabase
+        .from("users")
+        .select("id, name")
+        .eq("email", cleanEmail)
+        .maybeSingle();
+
+      if (!checkError && existingUser && existingUser.id !== cleanId) {
+        return {
+          success: false,
+          id: cleanId,
+          error: `El correo electrónico "${cleanEmail}" ya está registrado a nombre de "${existingUser.name}" (ID de usuario registrado: ${existingUser.id}). Por favor ingrese un correo diferente.`
+        };
+      }
+
+      // 2. Realizar inserción de datos limpios
       const { data, error } = await supabase
         .from("users")
         .upsert([finalData])
@@ -218,10 +253,11 @@ export const api = {
       dbErrorMessage = e?.message || String(e);
     }
 
+    // 3. Mantener fallback de almacenamiento local sincronizado
     try {
       const rawLocal = localStorage.getItem("towassist_fallback_users");
       let localUsers: any[] = rawLocal ? JSON.parse(rawLocal) : [];
-      const existingIdx = localUsers.findIndex(u => u.id === customId);
+      const existingIdx = localUsers.findIndex(u => u.id === cleanId);
       if (existingIdx >= 0) {
         localUsers[existingIdx] = { ...localUsers[existingIdx], ...finalData };
       } else {
@@ -236,7 +272,7 @@ export const api = {
       console.warn("Database save failed, but user was registered locally in browser fallback storage:", dbErrorMessage);
     }
 
-    return { success: dbSuccess, id: customId, error: dbErrorMessage };
+    return { success: dbSuccess, id: cleanId, error: dbErrorMessage };
   },
 
   deleteUser: async (id: string) => {
