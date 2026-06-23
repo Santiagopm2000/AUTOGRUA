@@ -30,7 +30,7 @@ CREATE TABLE users (
 -- 3. Creación de la Tabla de Servicios de Grúa (services)
 -- Gestiona las solicitudes e historial de servicios asignados a conductores.
 CREATE TABLE services (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),   -- ID incremental único tipo UUID
+    id TEXT PRIMARY KEY,                             -- ID de servicio generado por el frontend (srv-...)
     driver_id TEXT REFERENCES users(id) ON DELETE SET NULL, -- Conductor asignado (Foreign Key)
     client_name TEXT NOT NULL,                       -- Nombre del cliente que requiere auxilio
     client_phone TEXT,                               -- Teléfono celular del cliente

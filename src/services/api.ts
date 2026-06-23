@@ -190,6 +190,98 @@ export const api = {
       }
     }
   },
+  
+  // Bi-directional Synchronization with Supabase database
+  syncWithSupabase: async () => {
+    try {
+      // Test basic connection
+      const { error: testError } = await supabase.from("users").select("id").limit(1);
+      if (testError) {
+        return { success: false, error: testError.message };
+      }
+    } catch (err: any) {
+      return { success: false, error: err?.message || "Error al conectar con la base de datos de Supabase" };
+    }
+
+    let syncedUsersCount = 0;
+    let syncedServicesCount = 0;
+    let syncedIntegrationsCount = 0;
+
+    // 1. Sync local users to Supabase
+    try {
+      const rawLocal = localStorage.getItem("towassist_fallback_users");
+      if (rawLocal) {
+        const localUsers = JSON.parse(rawLocal);
+        if (Array.isArray(localUsers)) {
+          for (const user of localUsers) {
+            const { error } = await supabase.from("users").upsert([user]);
+            if (!error) syncedUsersCount++;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Users sync warning:", e);
+    }
+
+    // 2. Sync local services to Supabase
+    try {
+      const rawLocal = localStorage.getItem("towassist_fallback_services");
+      if (rawLocal) {
+        const localServices = JSON.parse(rawLocal);
+        if (Array.isArray(localServices)) {
+          for (const srv of localServices) {
+            const { error } = await supabase.from("services").upsert([srv]);
+            if (!error) syncedServicesCount++;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Services sync warning:", e);
+    }
+
+    // 3. Sync local integrations to Supabase
+    try {
+      const rawLocal = localStorage.getItem("towassist_fallback_integrations");
+      if (rawLocal) {
+        const localInts = JSON.parse(rawLocal);
+        if (Array.isArray(localInts)) {
+          for (const integration of localInts) {
+            const { error } = await supabase.from("integrations").upsert([integration]);
+            if (!error) syncedIntegrationsCount++;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Integrations sync warning:", e);
+    }
+
+    // 4. Download latest state from Supabase to fully align browser state
+    try {
+      const { data: dbUsers, error: usersErr } = await supabase.from("users").select("*");
+      if (!usersErr && dbUsers && dbUsers.length > 0) {
+        localStorage.setItem("towassist_fallback_users", JSON.stringify(dbUsers));
+      }
+
+      const { data: dbServices, error: srvErr } = await supabase.from("services").select("*");
+      if (!srvErr && dbServices) {
+        localStorage.setItem("towassist_fallback_services", JSON.stringify(dbServices));
+      }
+
+      const { data: dbIntegrations, error: intErr } = await supabase.from("integrations").select("*");
+      if (!intErr && dbIntegrations) {
+        localStorage.setItem("towassist_fallback_integrations", JSON.stringify(dbIntegrations));
+      }
+    } catch (e) {
+      console.warn("Pull server data warning:", e);
+    }
+
+    return {
+      success: true,
+      syncedUsers: syncedUsersCount,
+      syncedServices: syncedServicesCount,
+      syncedIntegrations: syncedIntegrationsCount
+    };
+  },
 
   // Admin User Management
   createUser: async (userData: { id?: string; name: string; email: string; phone?: string; mobile?: string; area?: string; role: string }) => {

@@ -26,6 +26,7 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   
   // Real-time Database check
   const [dbStatus, setDbStatus] = useState<"connected" | "fallback" | "testing">("testing");
@@ -76,6 +77,30 @@ export default function AdminDashboard() {
     } catch (err) {
       setDbStatus("fallback");
       setDbDetails("Error de conexión");
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    showNotification("Iniciando sincronización bidireccional de datos con Supabase...", "success");
+    try {
+      const result = await api.syncWithSupabase();
+      if (result.success) {
+        showNotification(
+          `Sincronización Completa: Se unificaron ${result.syncedUsers} usuarios, ${result.syncedServices} servicios e ${result.syncedIntegrations} integraciones con la base de datos de Supabase de forma segura.`,
+          "success"
+        );
+        await fetchData();
+      } else {
+        showNotification(
+          `Sincronización Fallida: No se pudo conectar de manera estable con Supabase. Error: ${result.error || "Desconocido"}. La aplicación seguirá operando con los datos locales en el navegador de forma segura.`,
+          "warning"
+        );
+      }
+    } catch (err: any) {
+      showNotification(`Error en el proceso de sincronización: ${err?.message || err}`, "warning");
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -198,7 +223,7 @@ export default function AdminDashboard() {
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-1">Sincronización en Tiempo Real de Grúas & Despacho</p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Connection Pill */}
           <div className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-xs font-black uppercase tracking-wider ${
             dbStatus === "connected" 
@@ -207,16 +232,33 @@ export default function AdminDashboard() {
                 ? "bg-amber-50 border-amber-200 text-amber-800 animate-pulse"
                 : "bg-rose-50 border-rose-200 text-rose-800"
           }`}>
-            <Database className="w-4 h-4" />
+            <Database className={`w-4 h-4 ${dbStatus === "testing" ? "animate-bounce" : ""}`} />
             <span>DB: {dbStatus === "connected" ? "CONECTADO" : dbStatus === "testing" ? "PROBANDO..." : "MOCK/FALLBACK"}</span>
           </div>
 
+          {/* Sync Button */}
           <button 
-            onClick={fetchData}
-            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold p-3 rounded-xl transition-all shadow-sm active:scale-95"
-            title="Sincronizar Datos"
+            disabled={syncing}
+            onClick={handleSync}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs tracking-wider uppercase transition-all shadow-sm active:scale-95 border ${
+              syncing
+                ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 hover:shadow-lg hover:shadow-blue-600/10"
+            }`}
+            title="Sincronizar datos locales con Supabase de manera bidireccional"
           >
-            <RefreshCcw className="w-5 h-5" />
+            <RefreshCcw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+            <span>{syncing ? "Sincronizando..." : "Sincronizar Supabase"}</span>
+          </button>
+
+          {/* Quick Refresh View Button */}
+          <button 
+            disabled={loading || syncing}
+            onClick={fetchData}
+            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold p-2.5 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50"
+            title="Actualizar Vista Local"
+          >
+            <RefreshCcw className={`w-4 h-4 ${loading && !syncing ? "animate-spin" : ""}`} />
           </button>
         </div>
       </div>
