@@ -1,6 +1,14 @@
 import { User, Integration, UserStatus, Service, ServiceStatus, DriverStatusLog } from "../types";
 import { supabase } from "./supabase";
 
+const DEFAULT_DEMO_USERS: User[] = [
+  { id: "user-px6", name: "Usuario Creador (Admin)", email: "px6.usa@gmail.com", phone: "+573100000000", mobile: "+573100000000", area: "Administración / Sistemas", role: "admin", status: "DISPONIBLE", status_start_time: new Date().toISOString(), last_update: new Date().toISOString() },
+  { id: "demo-admin", name: "Administrador Axistcorp", email: "admin@axistcorp.com", phone: "+573000000000", mobile: "+573000000000", area: "Gerencia / Tecnología", role: "admin", status: "DISPONIBLE", status_start_time: new Date().toISOString(), last_update: new Date().toISOString() },
+  { id: "demo-call-center", name: "Operador Call Center", email: "callcenter@axistcorp.com", phone: "+573111111111", mobile: "+573111111111", area: "Despacho / Call Center", role: "call_center", status: "DISPONIBLE", status_start_time: new Date().toISOString(), last_update: new Date().toISOString() },
+  { id: "demo-driver-1", name: "Carlos Mendoza (Grúa Camión)", email: "conductor@axistcorp.com", phone: "+573001234567", mobile: "+573001234567", area: "Logística - Zona Norte", role: "driver", status: "DISPONIBLE", last_lat: 4.7110, last_lng: -74.0721, status_start_time: new Date().toISOString(), last_update: new Date().toISOString() },
+  { id: "demo-driver-2", name: "Andrés Delgado (Grúa Cama)", email: "conductor2@axistcorp.com", phone: "+573119876543", mobile: "+573119876543", area: "Logística - Zona Centro", role: "driver", status: "EN SERVICIO", last_lat: 4.6980, last_lng: -74.1021, status_start_time: new Date().toISOString(), last_update: new Date().toISOString() }
+];
+
 export const api = {
   login: async (email: string): Promise<User> => {
     const cleanEmail = email.toLowerCase().trim();
@@ -30,14 +38,6 @@ export const api = {
   },
 
   getAllUsers: async (): Promise<User[]> => {
-    const defaultDemoUsers: User[] = [
-      { id: "user-px6", name: "Usuario Creador (Admin)", email: "px6.usa@gmail.com", phone: "+573100000000", mobile: "+573100000000", area: "Administración / Sistemas", role: "admin", status: "DISPONIBLE" },
-      { id: "demo-admin", name: "Administrador Axistcorp", email: "admin@axistcorp.com", phone: "+573000000000", mobile: "+573000000000", area: "Gerencia / Tecnología", role: "admin", status: "DISPONIBLE" },
-      { id: "demo-call-center", name: "Operador Call Center", email: "callcenter@axistcorp.com", phone: "+573111111111", mobile: "+573111111111", area: "Despacho / Call Center", role: "call_center", status: "DISPONIBLE" },
-      { id: "demo-driver-1", name: "Carlos Mendoza (Grúa Camión)", email: "conductor@axistcorp.com", phone: "+573001234567", mobile: "+573001234567", area: "Logística - Zona Norte", role: "driver", status: "DISPONIBLE", last_lat: 4.7110, last_lng: -74.0721, last_update: new Date().toISOString() },
-      { id: "demo-driver-2", name: "Andrés Delgado (Grúa Cama)", email: "conductor2@axistcorp.com", phone: "+573119876543", mobile: "+573119876543", area: "Logística - Zona Centro", role: "driver", status: "EN SERVICIO", last_lat: 4.6980, last_lng: -74.1021, last_update: new Date().toISOString() }
-    ];
-
     let dbUsers: User[] = [];
     try {
       const { data, error } = await supabase
@@ -56,6 +56,10 @@ export const api = {
       const rawLocal = localStorage.getItem("towassist_fallback_users");
       if (rawLocal) {
         localUsers = JSON.parse(rawLocal);
+      } else {
+        // Initialize localStorage with default demo users so they are saved locally and ready for sync
+        localStorage.setItem("towassist_fallback_users", JSON.stringify(DEFAULT_DEMO_USERS));
+        localUsers = DEFAULT_DEMO_USERS;
       }
     } catch (err) {
       console.error("Local storage user list parsing error:", err);
@@ -64,7 +68,7 @@ export const api = {
     const mergedMap = new Map<string, User>();
     
     // 1. Add defaults
-    defaultDemoUsers.forEach(u => mergedMap.set(u.id, u));
+    DEFAULT_DEMO_USERS.forEach(u => mergedMap.set(u.id, u));
     
     // 2. Add database users
     dbUsers.forEach(u => mergedMap.set(u.id, u));
@@ -98,15 +102,8 @@ export const api = {
       if (userIndex >= 0) {
         localUsers[userIndex] = { ...localUsers[userIndex], ...updateData };
       } else {
-        // Look up from hardcoded demo users to extend them with locations safely
-        const defaultDemoUsers: User[] = [
-          { id: "user-px6", name: "Usuario Creador (Admin)", email: "px6.usa@gmail.com", phone: "+573100000000", mobile: "+573100000000", area: "Administración / Sistemas", role: "admin", status: "DISPONIBLE" },
-          { id: "demo-admin", name: "Administrador Axistcorp", email: "admin@axistcorp.com", phone: "+573000000000", mobile: "+573000000000", area: "Gerencia / Tecnología", role: "admin", status: "DISPONIBLE" },
-          { id: "demo-call-center", name: "Operador Call Center", email: "callcenter@axistcorp.com", phone: "+573111111111", mobile: "+573111111111", area: "Despacho / Call Center", role: "call_center", status: "DISPONIBLE" },
-          { id: "demo-driver-1", name: "Carlos Mendoza (Grúa Camión)", email: "conductor@axistcorp.com", phone: "+573001234567", mobile: "+573001234567", area: "Logística - Zona Norte", role: "driver", status: "DISPONIBLE", last_lat: 4.7110, last_lng: -74.0721, last_update: new Date().toISOString() },
-          { id: "demo-driver-2", name: "Andrés Delgado (Grúa Cama)", email: "conductor2@axistcorp.com", phone: "+573119876543", mobile: "+573119876543", area: "Logística - Zona Centro", role: "driver", status: "EN SERVICIO", last_lat: 4.6980, last_lng: -74.1021, last_update: new Date().toISOString() }
-        ];
-        const foundDemo = defaultDemoUsers.find(u => u.id === userId);
+        // Look up from central DEFAULT_DEMO_USERS to extend them with locations safely
+        const foundDemo = DEFAULT_DEMO_USERS.find(u => u.id === userId);
         if (foundDemo) {
           localUsers.push({ ...foundDemo, ...updateData });
         } else {
@@ -207,17 +204,44 @@ export const api = {
     let syncedServicesCount = 0;
     let syncedIntegrationsCount = 0;
 
-    // 1. Sync local users to Supabase
+    // 1. Sync local and default demo users to Supabase
     try {
       const rawLocal = localStorage.getItem("towassist_fallback_users");
+      let localUsers: User[] = [];
       if (rawLocal) {
-        const localUsers = JSON.parse(rawLocal);
-        if (Array.isArray(localUsers)) {
-          for (const user of localUsers) {
-            const { error } = await supabase.from("users").upsert([user]);
-            if (!error) syncedUsersCount++;
-          }
-        }
+        localUsers = JSON.parse(rawLocal);
+      }
+
+      // Merge DEFAULT_DEMO_USERS with fallback local users to ensure the 5 vital records are ALWAYS present
+      const mergedUsersMap = new Map<string, User>();
+      DEFAULT_DEMO_USERS.forEach(u => mergedUsersMap.set(u.id, u));
+      if (Array.isArray(localUsers)) {
+        localUsers.forEach(u => mergedUsersMap.set(u.id, u));
+      }
+
+      const usersToSync = Array.from(mergedUsersMap.values());
+
+      for (const user of usersToSync) {
+        // Map all 13 columns to guarantee fully robust and correct insertions on Supabase
+        const cleanUser = {
+          id: user.id,
+          name: user.name || "Usuario",
+          email: user.email,
+          phone: user.phone || null,
+          mobile: user.mobile || null,
+          area: user.area || null,
+          role: ['admin', 'call_center', 'driver'].includes(user.role) ? user.role : 'driver',
+          status: ['DISPONIBLE', 'EN SERVICIO', 'MANTENIMIENTO', 'INACTIVO', 'TERMINE TURNO'].includes(user.status) ? user.status : 'DISPONIBLE',
+          status_start_time: user.status_start_time || new Date().toISOString(),
+          shift_start_time: user.shift_start_time || null,
+          last_lat: typeof user.last_lat === 'number' ? user.last_lat : null,
+          last_lng: typeof user.last_lng === 'number' ? user.last_lng : null,
+          last_update: user.last_update || new Date().toISOString()
+        };
+
+        const { error } = await supabase.from("users").upsert([cleanUser]);
+        if (!error) syncedUsersCount++;
+        else console.warn("[SYNC] Error saving user to database:", user.id, error);
       }
     } catch (e) {
       console.warn("Users sync warning:", e);
@@ -297,6 +321,7 @@ export const api = {
       return { success: false, id: "", error: "El Nombre y el Correo de Acceso son requeridos." };
     }
 
+    // Explicitly define all 13 columns of the users table to prevent any constraint failure on Supabase
     const finalData = {
       id: cleanId,
       name: cleanName,
@@ -304,8 +329,13 @@ export const api = {
       phone: cleanPhone,
       mobile: cleanMobile,
       area: cleanArea,
-      role: cleanRole,
-      status: "DISPONIBLE"
+      role: ['admin', 'call_center', 'driver'].includes(cleanRole) ? cleanRole : 'driver',
+      status: "DISPONIBLE",
+      status_start_time: new Date().toISOString(),
+      shift_start_time: null,
+      last_lat: null,
+      last_lng: null,
+      last_update: new Date().toISOString()
     };
 
     let dbSuccess = false;
