@@ -7,17 +7,33 @@ import AdminDashboard from "./components/AdminDashboard";
 import CallCenterDashboard from "./components/CallCenterDashboard";
 import FleetDashboard from "./components/FleetDashboard";
 import { Layout } from "./components/Layout";
+import { initializeRuntimeSupabase } from "./services/supabase";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [loadingConfig, setLoadingConfig] = useState(true);
 
-  // Simple persistence for demo
+  // Simple persistence for demo and runtime configuration fetch
   useEffect(() => {
-    const saved = localStorage.getItem("towassist_user");
-    if (saved) {
-      setUser(JSON.parse(saved));
+    async function init() {
+      await initializeRuntimeSupabase();
+      const saved = localStorage.getItem("towassist_user");
+      if (saved) {
+        setUser(JSON.parse(saved));
+      }
+      setLoadingConfig(false);
     }
+    init();
   }, []);
+
+  if (loadingConfig) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-100 font-sans">
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-sm font-medium tracking-wide animate-pulse">Conectando con el Servidor y Base de Datos...</p>
+      </div>
+    );
+  }
 
   const handleLogin = (u: User) => {
     setUser(u);

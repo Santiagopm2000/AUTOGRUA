@@ -26,6 +26,14 @@ async function startServer() {
     next();
   });
 
+  // API Config check to serve runtime credentials for Easypanel
+  app.get("/api/config", (req, res) => {
+    res.json({
+      supabaseUrl: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "https://yyuiyllbskobykruzkjj.supabase.co",
+      supabaseAnonKey: process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dWl5bGxic2tvYnlrcnV6a2pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMjUwMDAsImV4cCI6MjA4NzcwMTAwMH0.khms5lVmJA3KBCsIx87FJ2uTO9-DKA2Oa6AM_FGsBkc"
+    });
+  });
+
   // API Health check
   app.get("/api/health", (req, res) => res.json({ status: "ok" }));
   app.get("/ping", (req, res) => res.send("Axistcorp: pong"));
