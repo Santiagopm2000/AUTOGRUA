@@ -26,11 +26,32 @@ async function startServer() {
     next();
   });
 
+  // Helper to sanitize environment variables (removes quotes, undefined strings, trims whitespace)
+  const cleanEnvValue = (val: string | undefined): string => {
+    if (!val) return "";
+    let clean = val.trim();
+    if ((clean.startsWith('"') && clean.endsWith('"')) || (clean.startsWith("'") && clean.endsWith("'"))) {
+      clean = clean.slice(1, -1).trim();
+    }
+    if (clean === "undefined" || clean === "null") {
+      return "";
+    }
+    return clean;
+  };
+
   // API Config check to serve runtime credentials for Easypanel
   app.get("/api/config", (req, res) => {
+    const rawUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
+    const rawKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
+    
+    const cleanUrl = cleanEnvValue(rawUrl);
+    const cleanKey = cleanEnvValue(rawKey);
+
     res.json({
-      supabaseUrl: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "https://yyuiyllbskobykruzkjj.supabase.co",
-      supabaseAnonKey: process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dWl5bGxic2tvYnlrcnV6a2pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMjUwMDAsImV4cCI6MjA4NzcwMTAwMH0.khms5lVmJA3KBCsIx87FJ2uTO9-DKA2Oa6AM_FGsBkc"
+      supabaseUrl: cleanUrl && (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) 
+        ? cleanUrl 
+        : "https://yyuiyllbskobykruzkjj.supabase.co",
+      supabaseAnonKey: cleanKey ? cleanKey : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dWl5bGxic2tvYnlrcnV6a2pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMjUwMDAsImV4cCI6MjA4NzcwMTAwMH0.khms5lVmJA3KBCsIx87FJ2uTO9-DKA2Oa6AM_FGsBkc"
     });
   });
 
