@@ -27,15 +27,49 @@ async function startServer() {
   });
 
   // Helper to sanitize environment variables (removes quotes, undefined strings, trims whitespace)
-  const cleanEnvValue = (val: string | undefined): string => {
+  const cleanEnvValue = (val: string | undefined, isUrl = false): string => {
     if (!val) return "";
     let clean = val.trim();
     if ((clean.startsWith('"') && clean.endsWith('"')) || (clean.startsWith("'") && clean.endsWith("'"))) {
       clean = clean.slice(1, -1).trim();
     }
-    if (clean === "undefined" || clean === "null") {
+    if (clean === "undefined" || clean === "null" || clean === "") {
       return "";
     }
+    
+    // Si contiene espacios, palabras de otras variables o es demasiado corto, es inválido
+    if (clean.includes(" ") || clean.includes("VITE_") || clean.includes("=") || clean.includes("SUPABASE_")) {
+      return "";
+    }
+
+    if (isUrl) {
+      if (clean.endsWith("/rest/v1/")) {
+        clean = clean.slice(0, -9);
+      } else if (clean.endsWith("/rest/v1")) {
+        clean = clean.slice(0, -8);
+      } else if (clean.endsWith("/rest/")) {
+        clean = clean.slice(0, -6);
+      } else if (clean.endsWith("/rest")) {
+        clean = clean.slice(0, -5);
+      }
+      if (clean.endsWith("/")) {
+        clean = clean.slice(0, -1);
+      }
+
+      // Un URL de Supabase debe tener protocolo y ser de tamaño razonable (mínimo 20 caracteres)
+      if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+        return "";
+      }
+      if (clean.length < 20 || !clean.includes("supabase")) {
+        return "";
+      }
+    } else {
+      // El Anon Key de Supabase es un JWT largo, mínimo 60-80 caracteres
+      if (clean.length < 50) {
+        return "";
+      }
+    }
+
     return clean;
   };
 
@@ -44,15 +78,21 @@ async function startServer() {
     const rawUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
     const rawKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
     
-    const cleanUrl = cleanEnvValue(rawUrl);
-    const cleanKey = cleanEnvValue(rawKey);
+    const cleanUrl = cleanEnvValue(rawUrl, true);
+    const cleanKey = cleanEnvValue(rawKey, false);
 
-    res.json({
-      supabaseUrl: cleanUrl && (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) 
-        ? cleanUrl 
-        : "https://yyuiyllbskobykruzkjj.supabase.co",
-      supabaseAnonKey: cleanKey ? cleanKey : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dWl5bGxic2tvYnlrcnV6a2pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMjUwMDAsImV4cCI6MjA4NzcwMTAwMH0.khms5lVmJA3KBCsIx87FJ2uTO9-DKA2Oa6AM_FGsBkc"
-    });
+    // Only serve custom credentials if BOTH are clean and valid
+    if (cleanUrl && cleanKey) {
+      res.json({
+        supabaseUrl: cleanUrl,
+        supabaseAnonKey: cleanKey
+      });
+    } else {
+      res.json({
+        supabaseUrl: "https://yyuiyllbskobykruzkjj.supabase.co",
+        supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5dWl5bGxic2tvYnlrcnV6a2pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIxMjUwMDAsImV4cCI6MjA4NzcwMTAwMH0.khms5lVmJA3KBCsIx87FJ2uTO9-DKA2Oa6AM_FGsBkc"
+      });
+    }
   });
 
   // API Health check
