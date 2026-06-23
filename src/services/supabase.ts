@@ -12,7 +12,11 @@ let activeClient = createClient(currentUrl, currentKey);
 
 export const supabase = new Proxy({} as any, {
   get(target, prop) {
-    return Reflect.get(activeClient, prop);
+    const val = Reflect.get(activeClient, prop);
+    if (typeof val === 'function') {
+      return val.bind(activeClient);
+    }
+    return val;
   }
 });
 

@@ -48,6 +48,16 @@ export default function AdminDashboard() {
   const [servicesReport, setServicesReport] = useState<any[]>([]);
   const [activeReportTab, setActiveReportTab] = useState<'status_logs' | 'closed_services'>('status_logs');
 
+  // Dynamic feedback and alerts state
+  const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "warning"; show: boolean }>({ message: "", type: "success", show: false });
+
+  const showNotification = (message: string, type: "success" | "error" | "warning" = "success") => {
+    setNotification({ message, type, show: true });
+    setTimeout(() => {
+      setNotification(prev => ({ ...prev, show: false }));
+    }, 8000);
+  };
+
   const checkDbConnection = async () => {
     try {
       // Intentar una consulta directa súper rápida a Supabase
@@ -96,7 +106,12 @@ export default function AdminDashboard() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.createUser(newUser);
+    const result = await api.createUser(newUser);
+    if (result.success) {
+      showNotification(`Sincronización Exitosa: El usuario "${newUser.name}" se guardó correctamente en la base de datos de Supabase.`, "success");
+    } else {
+      showNotification(`Sincronización Fallida: Se guardó en el navegador (local), pero falló la conexión o estructura en Supabase. Error: ${result.error || "Desconocido"}`, "warning");
+    }
     setShowUserModal(false);
     setNewUser({ id: "", name: "", email: "", phone: "", mobile: "", area: "", role: "driver" });
     fetchData();
@@ -104,7 +119,8 @@ export default function AdminDashboard() {
 
   const handleCreateInt = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.createIntegration(newInt);
+    const result = await api.createIntegration(newInt);
+    showNotification(`Integración "${newInt.name}" configurada y registrada con éxito.`, "success");
     setShowIntModal(false);
     setNewInt({ name: "", url: "" });
     fetchData();
@@ -112,12 +128,14 @@ export default function AdminDashboard() {
 
   const toggleIntegration = async (id: string, current: boolean) => {
     await api.updateIntegrationStatus(id, !current);
+    showNotification(`Estado de automatización actualizado correctamente.`, "success");
     fetchData();
   };
 
   const deleteUser = async (id: string) => {
     if (confirm("¿Eliminar usuario?")) {
       await api.deleteUser(id);
+      showNotification(`Usuario eliminado de los registros. Sincronizando...`, "success");
       fetchData();
     }
   };
@@ -144,6 +162,33 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8">
+      {/* Floating high-contrast Toast Alert */}
+      {notification.show && (
+        <div className={`fixed bottom-6 right-6 z-50 max-w-md p-4 rounded-3xl shadow-2xl border flex items-start gap-3 transition-all duration-300 transform translate-y-0 ${
+          notification.type === "success" 
+            ? "bg-slate-900 border-slate-800 text-slate-100" 
+            : "bg-amber-500 border-amber-400 text-slate-950"
+        }`}>
+          <div className="mt-0.5 bg-white/10 p-1.5 rounded-xl text-current">
+            <Info className="w-5 h-5 flex-shrink-0" />
+          </div>
+          <div className="flex-1 space-y-0.5">
+            <h5 className="font-black text-xs uppercase tracking-wider">
+              {notification.type === "success" ? "Operación Exitosa" : "Alerta de Base de Datos"}
+            </h5>
+            <p className="text-[11px] font-bold leading-normal">
+              {notification.message}
+            </p>
+          </div>
+          <button 
+            onClick={() => setNotification(prev => ({ ...prev, show: false }))}
+            className="text-xs font-black cursor-pointer hover:opacity-85 p-1 bg-white/10 hover:bg-white/25 rounded-lg transition-all"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Header and Live DB Status Checklist */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
