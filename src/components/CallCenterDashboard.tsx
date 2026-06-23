@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { User, Integration, Service, ServiceStatus } from "../types";
 import { api } from "../services/api";
 import { 
@@ -33,15 +33,18 @@ let DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
-// Helper component to center map on drivers
+// Helper component to center map on drivers (centers once on initial load to prevent interrupting manual exploration)
 function MapRecenter({ drivers }: { drivers: User[] }) {
   const map = useMap();
+  const hasCentered = useRef(false);
+
   useEffect(() => {
-    if (drivers.length > 0) {
+    if (drivers.length > 0 && !hasCentered.current) {
       const validDrivers = drivers.filter(d => d.last_lat && d.last_lng);
       if (validDrivers.length > 0) {
         const bounds = L.latLngBounds(validDrivers.map(d => [d.last_lat!, d.last_lng!] as [number, number]));
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+        hasCentered.current = true;
       }
     }
   }, [drivers, map]);
@@ -225,7 +228,7 @@ export default function CallCenterDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Real-time Map */}
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl overflow-hidden min-h-[500px] relative shadow-sm z-10">
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl overflow-hidden h-[500px] relative shadow-sm z-10">
           <MapContainer 
             center={[4.6243, -74.0636]} 
             zoom={13} 

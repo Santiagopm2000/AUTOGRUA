@@ -67,14 +67,34 @@ export const api = {
 
     const mergedMap = new Map<string, User>();
     
-    // 1. Add defaults
-    DEFAULT_DEMO_USERS.forEach(u => mergedMap.set(u.id, u));
-    
-    // 2. Add database users
-    dbUsers.forEach(u => mergedMap.set(u.id, u));
+    // Helper to safely compare and merge users prioritizing the most recently updated data
+    const mergeUserSmart = (user: User) => {
+      const existing = mergedMap.get(user.id);
+      if (!existing) {
+        mergedMap.set(user.id, user);
+        return;
+      }
+      
+      const existingTime = existing.last_update ? new Date(existing.last_update).getTime() : 0;
+      const newTime = user.last_update ? new Date(user.last_update).getTime() : 0;
+      
+      // If the incoming user record has a newer or equal update timestamp, merge into existing
+      if (newTime >= existingTime) {
+        mergedMap.set(user.id, { ...existing, ...user });
+      } else {
+        // Otherwise, merge existing (newer) on top of the old incoming user
+        mergedMap.set(user.id, { ...user, ...existing });
+      }
+    };
 
-    // 3. Add custom local storage users
-    localUsers.forEach(u => mergedMap.set(u.id, u));
+    // 1. Add base defaults
+    DEFAULT_DEMO_USERS.forEach(u => mergeUserSmart(u));
+    
+    // 2. Add custom local storage users (which might contain offline changes)
+    localUsers.forEach(u => mergeUserSmart(u));
+
+    // 3. Add database users (which contains real-time synced records from all devices)
+    dbUsers.forEach(u => mergeUserSmart(u));
 
     return Array.from(mergedMap.values());
   },
