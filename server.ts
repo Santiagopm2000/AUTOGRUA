@@ -1,15 +1,13 @@
 import express from "express";
 import path from "path";
-import { fileURLToPath } from "url";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// [EASYPANEL REINCARNATION FIX] Version 1.0.3 - Removed URL-to-path ESM dependency for pure CommonJS compatibility
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+  const PORT = 3000;
   const distPath = path.join(process.cwd(), "dist");
   
   // Prioridad: 

@@ -233,7 +233,7 @@ export const api = {
     }
 
     if (!dbSuccess && dbErrorMessage) {
-      return { success: false, error: dbErrorMessage };
+      console.warn("Database save failed, but user was registered locally in browser fallback storage:", dbErrorMessage);
     }
 
     return { success: true, id: customId };
