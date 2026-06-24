@@ -65,10 +65,41 @@ export const api = {
       console.error("Local storage user list parsing error:", err);
     }
 
+    // Load deleted users list to filter out permanently deleted accounts
+    let deletedIds: string[] = [];
+    try {
+      const rawDeleted = localStorage.getItem("towassist_deleted_users");
+      if (rawDeleted) {
+        deletedIds = JSON.parse(rawDeleted);
+      }
+    } catch (e) {}
+
+    // Auto-detect deleted demo users from Supabase if we successfully loaded dbUsers
+    if (dbUsers.length > 0) {
+      const dbUserIds = new Set(dbUsers.map(u => u.id));
+      const missingDemoIds = DEFAULT_DEMO_USERS.filter(u => !dbUserIds.has(u.id)).map(u => u.id);
+      if (missingDemoIds.length > 0) {
+        let updated = false;
+        missingDemoIds.forEach(id => {
+          if (!deletedIds.includes(id)) {
+            deletedIds.push(id);
+            updated = true;
+          }
+        });
+        if (updated) {
+          try {
+            localStorage.setItem("towassist_deleted_users", JSON.stringify(deletedIds));
+          } catch (e) {}
+        }
+      }
+    }
+
     const mergedMap = new Map<string, User>();
     
     // Helper to safely compare and merge users prioritizing the most recently updated data
     const mergeUserSmart = (user: User) => {
+      if (deletedIds.includes(user.id)) return; // Do not merge deleted users
+
       const existing = mergedMap.get(user.id);
       if (!existing) {
         mergedMap.set(user.id, user);
@@ -232,11 +263,40 @@ export const api = {
         localUsers = JSON.parse(rawLocal);
       }
 
-      // Merge DEFAULT_DEMO_USERS with fallback local users to ensure the 5 vital records are ALWAYS present
+      // Load deleted users list to filter out permanently deleted accounts during sync
+      let deletedIds: string[] = [];
+      try {
+        const rawDeleted = localStorage.getItem("towassist_deleted_users");
+        if (rawDeleted) {
+          deletedIds = JSON.parse(rawDeleted);
+        }
+      } catch (e) {}
+
+      // Purge deleted users from Supabase first
+      for (const delId of deletedIds) {
+        try {
+          await supabase
+            .from("users")
+            .delete()
+            .eq("id", delId);
+        } catch (e) {
+          console.warn(`[SYNC] Error purging deleted user ${delId} from Supabase:`, e);
+        }
+      }
+
+      // Merge DEFAULT_DEMO_USERS with fallback local users to ensure the vital records are ALWAYS present unless deleted
       const mergedUsersMap = new Map<string, User>();
-      DEFAULT_DEMO_USERS.forEach(u => mergedUsersMap.set(u.id, u));
+      DEFAULT_DEMO_USERS.forEach(u => {
+        if (!deletedIds.includes(u.id)) {
+          mergedUsersMap.set(u.id, u);
+        }
+      });
       if (Array.isArray(localUsers)) {
-        localUsers.forEach(u => mergedUsersMap.set(u.id, u));
+        localUsers.forEach(u => {
+          if (!deletedIds.includes(u.id)) {
+            mergedUsersMap.set(u.id, u);
+          }
+        });
       }
 
       const usersToSync = Array.from(mergedUsersMap.values());
@@ -458,6 +518,18 @@ export const api = {
         .eq("id", id);
     } catch (e) {
       console.warn("deleteUser cloud error:", e);
+    }
+
+    // Add to deleted users registry to prevent defaults resurrection
+    try {
+      const rawDeleted = localStorage.getItem("towassist_deleted_users");
+      const deletedIds = rawDeleted ? JSON.parse(rawDeleted) : [];
+      if (!deletedIds.includes(id)) {
+        deletedIds.push(id);
+        localStorage.setItem("towassist_deleted_users", JSON.stringify(deletedIds));
+      }
+    } catch (e) {
+      console.error("Local storage deleted tracking error:", e);
     }
 
     try {

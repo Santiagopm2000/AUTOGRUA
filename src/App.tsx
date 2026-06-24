@@ -40,7 +40,15 @@ export default function App() {
     localStorage.setItem("towassist_user", JSON.stringify(u));
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (user && user.role === 'driver') {
+      try {
+        const { api } = await import("./services/api");
+        await api.updateStatus(user.id, "TERMINE TURNO");
+      } catch (err) {
+        console.warn("Could not set driver status to offline on logout:", err);
+      }
+    }
     setUser(null);
     localStorage.removeItem("towassist_user");
   };

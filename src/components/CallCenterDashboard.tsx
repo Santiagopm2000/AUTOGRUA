@@ -40,7 +40,8 @@ function MapRecenter({ drivers }: { drivers: User[] }) {
 
   useEffect(() => {
     if (drivers.length > 0 && !hasCentered.current) {
-      const validDrivers = drivers.filter(d => d.last_lat && d.last_lng);
+      // Filter out drivers with inactive GPS or ended shifts (TERMINE TURNO)
+      const validDrivers = drivers.filter(d => d.last_lat && d.last_lng && d.status !== 'TERMINE TURNO');
       if (validDrivers.length > 0) {
         const bounds = L.latLngBounds(validDrivers.map(d => [d.last_lat!, d.last_lng!] as [number, number]));
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
@@ -239,7 +240,7 @@ export default function CallCenterDashboard() {
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            {Array.isArray(drivers) && drivers.filter(d => d.last_lat && d.last_lng).map((driver) => (
+            {Array.isArray(drivers) && drivers.filter(d => d.last_lat && d.last_lng && d.status !== 'TERMINE TURNO').map((driver) => (
               <Marker 
                 key={driver.id} 
                 position={[driver.last_lat!, driver.last_lng!]}
