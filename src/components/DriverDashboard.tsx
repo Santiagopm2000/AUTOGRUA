@@ -40,6 +40,8 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [isGpsSimulated, setIsGpsSimulated] = useState(false);
+  const [permissionState, setPermissionState] = useState<'loading' | 'granted' | 'prompt' | 'denied'>('loading');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [assignedServices, setAssignedServices] = useState<Service[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
@@ -96,13 +98,29 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
   useEffect(() => {
     if ("permissions" in navigator) {
       navigator.permissions.query({ name: 'geolocation' as PermissionName }).then((result) => {
+        setPermissionState(result.state as any);
         if (result.state === 'prompt') {
           setShowPermissionModal(true);
         } else if (result.state === 'denied') {
-          setGeoError("Permiso de ubicación denegado. Por favor, habilítalo en la configuración de tu celular.");
+          setGeoError("Permiso de ubicación denegado. Por favor, habilítalo o usa el GPS de prueba.");
         }
+        
+        result.onchange = () => {
+          setPermissionState(result.state as any);
+          if (result.state === 'granted') {
+            setShowPermissionModal(false);
+            setGeoError(null);
+          } else if (result.state === 'denied') {
+            setGeoError("Permiso de ubicación denegado. Por favor, habilítalo o usa el GPS de prueba.");
+          }
+        };
+      }).catch((err) => {
+        console.warn("Permissions API query failed:", err);
+        setPermissionState('prompt');
+        setShowPermissionModal(true);
       });
     } else {
+      setPermissionState('prompt');
       setShowPermissionModal(true);
     }
 
@@ -156,14 +174,30 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
     return () => clearInterval(interval);
   }, [statusStartTime, status]);
 
-  const startTracking = useCallback(() => {
-    if ("geolocation" in navigator) {
+  const startTracking = useCallback((forceSimulate: boolean = false) => {
+    if (forceSimulate) {
+      setIsGpsSimulated(true);
       setGeoError(null);
       setShowPermissionModal(false);
+      
+      const jitterLat = 4.6243 + (Math.random() - 0.5) * 0.04;
+      const jitterLng = -74.0636 + (Math.random() - 0.5) * 0.04;
+      const fallbackLoc = { lat: jitterLat, lng: jitterLng };
+      setLocation(fallbackLoc);
+      if (status !== 'TERMINE TURNO') {
+        api.updateStatus(user.id, status, fallbackLoc.lat, fallbackLoc.lng);
+      }
+      return null;
+    }
+
+    if ("geolocation" in navigator) {
+      setGeoError(null);
 
       // 1. Fast-track initial location check immediately on login/mount
       navigator.geolocation.getCurrentPosition(
         (pos) => {
+          setShowPermissionModal(false);
+          setIsGpsSimulated(false);
           const newLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setLocation(newLoc);
           if (status !== 'TERMINE TURNO') {
@@ -171,14 +205,15 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
           }
         },
         (err) => {
-          console.warn("Initial direct getCurrentPosition failed/blocked, starting simulator:", err);
-          // Set a simulated coordinate around Bogotá so they appear instantly on the map (crucial for iframe development views)
-          const jitterLat = 4.6243 + (Math.random() - 0.5) * 0.08;
-          const jitterLng = -74.0636 + (Math.random() - 0.5) * 0.08;
-          const fallbackLoc = { lat: jitterLat, lng: jitterLng };
-          setLocation(fallbackLoc);
+          console.warn("Initial direct getCurrentPosition failed/blocked:", err);
+          if (err.code === 1) {
+            setGeoError("Permiso de ubicación denegado. Por favor, habilítalo o usa el GPS de prueba.");
+          } else {
+            setGeoError("Error de GPS. Por favor, reintenta o usa el GPS de prueba.");
+          }
+          setLocation(null);
           if (status !== 'TERMINE TURNO') {
-            api.updateStatus(user.id, status, fallbackLoc.lat, fallbackLoc.lng);
+            api.updateStatus(user.id, status, undefined, undefined);
           }
         },
         { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
@@ -187,6 +222,8 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
       // 2. Active watch for continuous updates
       const watchId = navigator.geolocation.watchPosition(
         (pos) => {
+          setShowPermissionModal(false);
+          setIsGpsSimulated(false);
           const newLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setLocation(newLoc);
           setGeoError(null);
@@ -196,50 +233,66 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
           }
         },
         (err) => {
-          console.error("Geolocation error:", err);
-          if (err.code === 1) {
-            setGeoError("Permiso de ubicación denegado (Ubicación Simulada).");
-          } else {
-            setGeoError("Error al obtener ubicación (Ubicación Simulada).");
-          }
-          // Fallback to updated simulated coordinates on failure
-          const jitterLat = 4.6243 + (Math.random() - 0.5) * 0.08;
-          const jitterLng = -74.0636 + (Math.random() - 0.5) * 0.08;
-          const fallbackLoc = { lat: jitterLat, lng: jitterLng };
-          setLocation(fallbackLoc);
-          if (status !== 'TERMINE TURNO') {
-            api.updateStatus(user.id, status, fallbackLoc.lat, fallbackLoc.lng);
+          console.error("Geolocation watch error:", err);
+          if (!isGpsSimulated) {
+            if (err.code === 1) {
+              setGeoError("Permiso de ubicación denegado. Por favor, habilítalo o usa el GPS de prueba.");
+            } else {
+              setGeoError("Error de GPS. Por favor, reintenta o usa el GPS de prueba.");
+            }
+            setLocation(null);
+            if (status !== 'TERMINE TURNO') {
+              api.updateStatus(user.id, status, undefined, undefined);
+            }
           }
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
       return watchId;
     } else {
-      setGeoError("Tu dispositivo no soporta geolocalización (Ubicación Simulada).");
-      const jitterLat = 4.6243 + (Math.random() - 0.5) * 0.08;
-      const jitterLng = -74.0636 + (Math.random() - 0.5) * 0.08;
-      const fallbackLoc = { lat: jitterLat, lng: jitterLng };
-      setLocation(fallbackLoc);
+      setGeoError("Tu dispositivo no soporta geolocalización. Por favor, usa el GPS de prueba.");
+      setLocation(null);
       if (status !== 'TERMINE TURNO') {
-        api.updateStatus(user.id, status, fallbackLoc.lat, fallbackLoc.lng);
+        api.updateStatus(user.id, status, undefined, undefined);
       }
       return null;
     }
-  }, [status, user.id]);
+  }, [status, user.id, isGpsSimulated]);
 
   useEffect(() => {
-    const watchId = startTracking();
+    let watchId: number | null = null;
+    if (permissionState === 'granted') {
+      watchId = startTracking(false);
+    }
     return () => {
       if (watchId !== null) navigator.geolocation.clearWatch(watchId);
     };
-  }, [startTracking]);
+  }, [permissionState, startTracking]);
 
   // Periodic real-time GPS feed keeping coordinates continuously updated and moving (smooth simulation fallback)
   useEffect(() => {
     if (status === 'TERMINE TURNO') return;
 
     const intervalId = setInterval(() => {
-      if ("geolocation" in navigator) {
+      if (isGpsSimulated) {
+        setLocation(prev => {
+          if (prev) {
+            // Smoothly walk/drive the crane on the map
+            const speed = 0.001; // Step speed
+            const stepLat = (Math.random() - 0.45) * speed; // Slight upward-north drift
+            const stepLng = (Math.random() - 0.5) * speed;
+            const updated = { lat: prev.lat + stepLat, lng: prev.lng + stepLng };
+            api.updateStatus(user.id, status, updated.lat, updated.lng);
+            return updated;
+          } else {
+            const centerLat = 4.6243 + (Math.random() - 0.5) * 0.08;
+            const centerLng = -74.0636 + (Math.random() - 0.5) * 0.08;
+            const updated = { lat: centerLat, lng: centerLng };
+            api.updateStatus(user.id, status, updated.lat, updated.lng);
+            return updated;
+          }
+        });
+      } else if ("geolocation" in navigator && permissionState === 'granted') {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             const newLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -253,46 +306,15 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
             });
           },
           (err) => {
-            // Geolocation is blocked, denied, or inactive (e.g. inside an iframe environment)
-            // Perform high-fidelity dynamic movement simulation in Bogotá so developers and users see active real-time tracking
-            setLocation(prev => {
-              if (prev) {
-                // Smoothly walk/drive the crane on the map
-                const speed = 0.001; // Step speed
-                const stepLat = (Math.random() - 0.45) * speed; // Slight upward-north drift
-                const stepLng = (Math.random() - 0.5) * speed;
-                const updated = { lat: prev.lat + stepLat, lng: prev.lng + stepLng };
-                api.updateStatus(user.id, status, updated.lat, updated.lng);
-                return updated;
-              } else {
-                const centerLat = 4.6243 + (Math.random() - 0.5) * 0.08;
-                const centerLng = -74.0636 + (Math.random() - 0.5) * 0.08;
-                const updated = { lat: centerLat, lng: centerLng };
-                api.updateStatus(user.id, status, updated.lat, updated.lng);
-                return updated;
-              }
-            });
+            console.warn("Periodic real GPS update failed:", err);
           },
           { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
         );
-      } else {
-        // No navigator.geolocation support
-        setLocation(prev => {
-          if (prev) {
-            const speed = 0.001;
-            const stepLat = (Math.random() - 0.45) * speed;
-            const stepLng = (Math.random() - 0.5) * speed;
-            const updated = { lat: prev.lat + stepLat, lng: prev.lng + stepLng };
-            api.updateStatus(user.id, status, updated.lat, updated.lng);
-            return updated;
-          }
-          return prev;
-        });
       }
     }, 15000); // Trigger every 15 seconds to keep map coordinates continuously fresh
 
     return () => clearInterval(intervalId);
-  }, [status, user.id]);
+  }, [status, user.id, isGpsSimulated, permissionState]);
 
   const handleStatusChange = async (newStatus: UserStatus) => {
     const now = new Date();
@@ -355,12 +377,20 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
               <p className="text-slate-500 text-sm leading-relaxed mb-8">
                 Para operar, Axistcorp necesita rastrear tu ubicación en tiempo real. Esto permite asignar servicios cercanos y reportar tu estado al centro de control.
               </p>
-              <button
-                onClick={() => startTracking()}
-                className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl shadow-blue-600/20 active:scale-95 transition-transform uppercase tracking-widest text-sm"
-              >
-                Habilitar Ubicación
-              </button>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => startTracking(false)}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-xl shadow-blue-600/20 active:scale-95 transition-transform uppercase tracking-wider text-xs"
+                >
+                  🟢 Habilitar GPS Real
+                </button>
+                <button
+                  onClick={() => startTracking(true)}
+                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-black py-4 rounded-2xl active:scale-95 transition-transform uppercase tracking-wider text-xs border border-slate-200"
+                >
+                  🔧 Usar Ubicación de Prueba
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
@@ -549,12 +579,12 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
                 "text-[10px] font-black uppercase tracking-widest",
                 geoError ? "text-red-600" : "text-slate-400"
               )}>
-                {geoError || (location ? "GPS Activo" : "Buscando GPS...")}
+                {geoError || (location ? (isGpsSimulated ? "GPS Activo (Simulado)" : "GPS Activo (Real)") : "Buscando GPS...")}
               </span>
             </div>
             {location && !geoError && (
               <span className="text-[10px] font-mono text-slate-300 font-bold">
-                {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
+                {location.lat.toFixed(4)}, {location.lng.toFixed(4)} {isGpsSimulated ? "🔧" : "📡"}
               </span>
             )}
           </div>
@@ -570,11 +600,34 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
           )}
 
           {geoError && (
+            <div className="flex flex-col gap-2 w-full">
+              <button 
+                onClick={() => startTracking(false)}
+                className="text-[10px] font-black uppercase bg-red-600 hover:bg-red-700 text-white px-3 py-3 rounded-xl w-full active:scale-95 transition-all"
+              >
+                Reintentar GPS Real
+              </button>
+              <button 
+                onClick={() => startTracking(true)}
+                className="text-[10px] font-black uppercase bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-3 rounded-xl w-full border border-slate-200 active:scale-95 transition-all"
+              >
+                Usar Ubicación de Prueba
+              </button>
+            </div>
+          )}
+          
+          {!geoError && (
             <button 
-              onClick={() => window.location.reload()}
-              className="text-[10px] font-black uppercase bg-red-600 text-white px-3 py-3 rounded-xl w-full"
+              onClick={() => {
+                if (isGpsSimulated) {
+                  startTracking(false);
+                } else {
+                  startTracking(true);
+                }
+              }}
+              className="text-[9px] font-black uppercase bg-slate-50 hover:bg-slate-100 text-slate-400 border border-slate-100 px-3 py-2 rounded-xl w-full active:scale-95 transition-all"
             >
-              Reintentar GPS
+              {isGpsSimulated ? "Cambiar a GPS Real" : "Cambiar a Ubicación de Prueba"}
             </button>
           )}
         </div>
