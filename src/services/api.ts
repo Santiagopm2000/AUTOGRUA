@@ -135,10 +135,15 @@ export const api = {
     const updateData: any = { 
       status, 
       status_start_time: now, 
-      last_lat: lat, 
-      last_lng: lng, 
       last_update: now 
     };
+
+    if (lat !== undefined && lat !== null) {
+      updateData.last_lat = lat;
+    }
+    if (lng !== undefined && lng !== null) {
+      updateData.last_lng = lng;
+    }
 
     if (shiftStartTime) {
       updateData.shift_start_time = shiftStartTime;
