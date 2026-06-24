@@ -29,12 +29,18 @@ interface DriverDashboardProps {
 }
 
 export default function DriverDashboard({ user }: DriverDashboardProps) {
-  const [status, setStatus] = useState<UserStatus>(user.status);
-  const [statusStartTime, setStatusStartTime] = useState<Date>(new Date(user.status_start_time || Date.now()));
-  const [shiftStartTime, setShiftStartTime] = useState<Date | null>(
-    user.shift_start_time ? new Date(user.shift_start_time) : 
-    (user.status !== 'TERMINE TURNO' ? new Date(user.status_start_time || Date.now()) : null)
+  const [status, setStatus] = useState<UserStatus>(
+    user.status === 'TERMINE TURNO' ? 'DISPONIBLE' : user.status
   );
+  const [statusStartTime, setStatusStartTime] = useState<Date>(
+    user.status === 'TERMINE TURNO' ? new Date() : new Date(user.status_start_time || Date.now())
+  );
+  const [shiftStartTime, setShiftStartTime] = useState<Date | null>(() => {
+    if (user.status === 'TERMINE TURNO') {
+      return new Date();
+    }
+    return user.shift_start_time ? new Date(user.shift_start_time) : new Date(user.status_start_time || Date.now());
+  });
   const [elapsed, setElapsed] = useState("00:00:00");
   const [totalShiftTime, setTotalShiftTime] = useState<string | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -43,6 +49,36 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [assignedServices, setAssignedServices] = useState<Service[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
+
+  // Auto-activate and register available status in database on login mount if previously offline
+  useEffect(() => {
+    if (user.status === 'TERMINE TURNO') {
+      const now = new Date();
+      if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            setLocation(loc);
+            api.updateStatus(user.id, 'DISPONIBLE', loc.lat, loc.lng, now.toISOString());
+          },
+          (err) => {
+            const jitterLat = 4.6243 + (Math.random() - 0.5) * 0.08;
+            const jitterLng = -74.0636 + (Math.random() - 0.5) * 0.08;
+            const fallbackLoc = { lat: jitterLat, lng: jitterLng };
+            setLocation(fallbackLoc);
+            api.updateStatus(user.id, 'DISPONIBLE', fallbackLoc.lat, fallbackLoc.lng, now.toISOString());
+          },
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+      } else {
+        const jitterLat = 4.6243 + (Math.random() - 0.5) * 0.08;
+        const jitterLng = -74.0636 + (Math.random() - 0.5) * 0.08;
+        const fallbackLoc = { lat: jitterLat, lng: jitterLng };
+        setLocation(fallbackLoc);
+        api.updateStatus(user.id, 'DISPONIBLE', fallbackLoc.lat, fallbackLoc.lng, now.toISOString());
+      }
+    }
+  }, [user]);
 
   const fetchCurrentServices = useCallback(async () => {
     try {
