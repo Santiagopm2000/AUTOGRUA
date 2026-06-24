@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { User, UserStatus, Service, ServiceStatus } from "../types";
 import { api } from "../services/api";
 import { 
@@ -45,6 +45,7 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [assignedServices, setAssignedServices] = useState<Service[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
+  const watchIdRef = useRef<number | null>(null);
 
   const fetchCurrentServices = useCallback(async () => {
     try {
@@ -175,6 +176,12 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
   }, [statusStartTime, status]);
 
   const startTracking = useCallback((forceSimulate: boolean = false) => {
+    // Clear any existing active watch before starting a new one to prevent duplicate trackers
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+
     if (forceSimulate) {
       setIsGpsSimulated(true);
       setGeoError(null);
@@ -248,6 +255,7 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
+      watchIdRef.current = watchId;
       return watchId;
     } else {
       setGeoError("Tu dispositivo no soporta geolocalización. Por favor, usa el GPS de prueba.");
@@ -260,14 +268,16 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
   }, [status, user.id, isGpsSimulated]);
 
   useEffect(() => {
-    let watchId: number | null = null;
-    if (permissionState === 'granted') {
-      watchId = startTracking(false);
-    }
+    // Automatically trigger real tracking immediately upon entering the dashboard to prompt for location
+    startTracking(false);
+
     return () => {
-      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
     };
-  }, [permissionState, startTracking]);
+  }, [startTracking]);
 
   // Periodic real-time GPS feed keeping coordinates continuously updated and moving (smooth simulation fallback)
   useEffect(() => {
