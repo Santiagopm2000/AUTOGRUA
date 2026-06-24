@@ -135,15 +135,10 @@ export const api = {
     const updateData: any = { 
       status, 
       status_start_time: now, 
+      last_lat: lat, 
+      last_lng: lng, 
       last_update: now 
     };
-
-    if (lat !== undefined && lat !== null) {
-      updateData.last_lat = lat;
-    }
-    if (lng !== undefined && lng !== null) {
-      updateData.last_lng = lng;
-    }
 
     if (shiftStartTime) {
       updateData.shift_start_time = shiftStartTime;
@@ -268,40 +263,11 @@ export const api = {
         localUsers = JSON.parse(rawLocal);
       }
 
-      // Load deleted users list to filter out permanently deleted accounts during sync
-      let deletedIds: string[] = [];
-      try {
-        const rawDeleted = localStorage.getItem("towassist_deleted_users");
-        if (rawDeleted) {
-          deletedIds = JSON.parse(rawDeleted);
-        }
-      } catch (e) {}
-
-      // Purge deleted users from Supabase first
-      for (const delId of deletedIds) {
-        try {
-          await supabase
-            .from("users")
-            .delete()
-            .eq("id", delId);
-        } catch (e) {
-          console.warn(`[SYNC] Error purging deleted user ${delId} from Supabase:`, e);
-        }
-      }
-
-      // Merge DEFAULT_DEMO_USERS with fallback local users to ensure the vital records are ALWAYS present unless deleted
+      // Merge DEFAULT_DEMO_USERS with fallback local users to ensure the 5 vital records are ALWAYS present
       const mergedUsersMap = new Map<string, User>();
-      DEFAULT_DEMO_USERS.forEach(u => {
-        if (!deletedIds.includes(u.id)) {
-          mergedUsersMap.set(u.id, u);
-        }
-      });
+      DEFAULT_DEMO_USERS.forEach(u => mergedUsersMap.set(u.id, u));
       if (Array.isArray(localUsers)) {
-        localUsers.forEach(u => {
-          if (!deletedIds.includes(u.id)) {
-            mergedUsersMap.set(u.id, u);
-          }
-        });
+        localUsers.forEach(u => mergedUsersMap.set(u.id, u));
       }
 
       const usersToSync = Array.from(mergedUsersMap.values());
