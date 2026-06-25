@@ -16,7 +16,7 @@ import {
   Phone
 } from "lucide-react";
 import { motion } from "motion/react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -54,6 +54,7 @@ function MapRecenter({ drivers }: { drivers: User[] }) {
 
 export default function CallCenterDashboard() {
   const [drivers, setDrivers] = useState<User[]>([]);
+  const [activeRoutes, setActiveRoutes] = useState<Record<string, Array<[number, number]>>>({});
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [stats, setStats] = useState({ activeDrivers: 0, inService: 0 });
   const [loading, setLoading] = useState(true);
@@ -123,18 +124,20 @@ export default function CallCenterDashboard() {
 
   const fetchData = async () => {
     try {
-      const [driversData, statsData, integrationsData, servicesData, logsData] = await Promise.all([
+      const [driversData, statsData, integrationsData, servicesData, logsData, routesData] = await Promise.all([
         api.getDrivers(),
         api.getAdminStats(),
         api.getIntegrations(),
         api.getServices(),
-        api.getDriverStatusLogs()
+        api.getDriverStatusLogs(),
+        api.getActiveRoutes()
       ]);
       setDrivers(driversData || []);
       setStats(statsData || { activeDrivers: 0, inService: 0 });
       setIntegrations((integrationsData || []).filter(i => i.active));
       setServices(servicesData || []);
       setDriverLogs(logsData || []);
+      setActiveRoutes(routesData || {});
     } catch (error) {
       console.error("Error fetching monitoring data:", error);
     } finally {
@@ -326,6 +329,66 @@ export default function CallCenterDashboard() {
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
+
+            {/* Render active routes/polylines and start origin markers for drivers in EN SERVICIO */}
+            {Array.isArray(drivers) && drivers.filter(d => d.status === 'EN SERVICIO').map((driver) => {
+              const routePoints = activeRoutes[driver.id];
+              if (!routePoints || routePoints.length < 2) return null;
+              
+              const startPoint = routePoints[0];
+              return (
+                <React.Fragment key={`route-${driver.id}`}>
+                  {/* Uber-style dual polyline glow/path */}
+                  <Polyline 
+                    positions={routePoints} 
+                    pathOptions={{
+                      color: '#93c5fd', 
+                      weight: 8,
+                      opacity: 0.45,
+                      lineCap: 'round',
+                      lineJoin: 'round'
+                    }}
+                  />
+                  <Polyline 
+                    positions={routePoints} 
+                    pathOptions={{
+                      color: '#2563eb', // Vibrant blue
+                      weight: 4,
+                      opacity: 0.9,
+                      lineCap: 'round',
+                      lineJoin: 'round'
+                    }}
+                  />
+                  {/* Green Start Origin Pin */}
+                  <Marker
+                    position={startPoint}
+                    icon={L.divIcon({
+                      className: 'custom-origin-icon',
+                      html: `
+                        <div class="relative">
+                          <div class="w-6 h-6 rounded-full border-4 border-emerald-500 bg-white flex items-center justify-center shadow-lg">
+                            <div class="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                          </div>
+                          <div class="absolute -bottom-5 left-1/2 -translate-x-1/2 bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-sm whitespace-nowrap">
+                            <span class="text-[7px] font-black uppercase tracking-tighter text-emerald-600">INICIO DE SERVICIO</span>
+                          </div>
+                        </div>
+                      `,
+                      iconSize: [24, 24],
+                      iconAnchor: [12, 12]
+                    })}
+                  >
+                    <Popup>
+                      <div className="p-1">
+                        <p className="font-extrabold text-[10px] text-emerald-600 uppercase tracking-wider mb-0.5">Punto de Origen</p>
+                        <p className="text-xs font-bold text-slate-700">Donde {driver.name} inició el servicio.</p>
+                      </div>
+                    </Popup>
+                  </Marker>
+                </React.Fragment>
+              );
+            })}
+
             {Array.isArray(drivers) && drivers.filter(d => d.last_lat && d.last_lng && d.status !== 'TERMINE TURNO').map((driver) => (
               <Marker 
                 key={driver.id} 

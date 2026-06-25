@@ -140,6 +140,39 @@ export const api = {
       last_update: now 
     };
 
+    // Route tracking/clearing logic in localStorage
+    try {
+      const rawRoutes = localStorage.getItem("towassist_active_routes");
+      let routes: Record<string, Array<[number, number]>> = rawRoutes ? JSON.parse(rawRoutes) : {};
+
+      if (status === 'EN SERVICIO') {
+        if (lat !== undefined && lng !== undefined && lat !== null && lng !== null) {
+          // If the route doesn't exist yet, initialize it
+          if (!routes[userId]) {
+            routes[userId] = [[lat, lng]];
+          } else {
+            const currentRoute = routes[userId];
+            if (currentRoute.length === 0) {
+              currentRoute.push([lat, lng]);
+            } else {
+              const lastPoint = currentRoute[currentRoute.length - 1];
+              // Calculate distance to prevent adding exact duplicates or very close noise points
+              const dist = Math.sqrt(Math.pow(lat - lastPoint[0], 2) + Math.pow(lng - lastPoint[1], 2));
+              if (dist > 0.00005) { // ~5.5 meters
+                currentRoute.push([lat, lng]);
+              }
+            }
+          }
+        }
+      } else if (status === 'DISPONIBLE' || status === 'TERMINE TURNO' || status === 'MANTENIMIENTO') {
+        // Clear active route when driver becomes available, ends shift, or goes to maintenance
+        delete routes[userId];
+      }
+      localStorage.setItem("towassist_active_routes", JSON.stringify(routes));
+    } catch (routeErr) {
+      console.warn("Failed to update route tracking in localStorage:", routeErr);
+    }
+
     if (shiftStartTime) {
       updateData.shift_start_time = shiftStartTime;
     }
@@ -781,5 +814,14 @@ export const api = {
       return logsList.filter(l => l.driver_id === driverId);
     }
     return logsList;
+  },
+
+  getActiveRoutes: async (): Promise<Record<string, Array<[number, number]>>> => {
+    try {
+      const raw = localStorage.getItem("towassist_active_routes");
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
   }
 };
