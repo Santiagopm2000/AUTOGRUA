@@ -46,6 +46,7 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
   const [assignedServices, setAssignedServices] = useState<Service[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
   const watchIdRef = useRef<number | null>(null);
+  const lastSavedLocationRef = useRef<{ lat: number; lng: number } | null>(null);
 
   const fetchCurrentServices = useCallback(async () => {
     try {
@@ -191,6 +192,7 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
       const jitterLng = -74.0636 + (Math.random() - 0.5) * 0.04;
       const fallbackLoc = { lat: jitterLat, lng: jitterLng };
       setLocation(fallbackLoc);
+      lastSavedLocationRef.current = fallbackLoc;
       if (status !== 'TERMINE TURNO') {
         api.updateStatus(user.id, status, fallbackLoc.lat, fallbackLoc.lng);
       }
@@ -207,6 +209,7 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
           setIsGpsSimulated(false);
           const newLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setLocation(newLoc);
+          lastSavedLocationRef.current = newLoc;
           if (status !== 'TERMINE TURNO') {
             api.updateStatus(user.id, status, newLoc.lat, newLoc.lng);
           }
@@ -234,9 +237,24 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
           const newLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setLocation(newLoc);
           setGeoError(null);
-          // Update location on server periodically if not offline
-          if (status !== 'TERMINE TURNO') {
-            api.updateStatus(user.id, status, newLoc.lat, newLoc.lng);
+
+          // Real-time tracking if they actually move (more than ~11 meters / 0.0001 deg)
+          const lastSaved = lastSavedLocationRef.current;
+          if (!lastSaved) {
+            lastSavedLocationRef.current = newLoc;
+            if (status !== 'TERMINE TURNO') {
+              api.updateStatus(user.id, status, newLoc.lat, newLoc.lng);
+            }
+          } else {
+            const latDiff = Math.abs(newLoc.lat - lastSaved.lat);
+            const lngDiff = Math.abs(newLoc.lng - lastSaved.lng);
+            const threshold = 0.0001; // ~11 meters, representing significant movement
+            if (latDiff > threshold || lngDiff > threshold) {
+              lastSavedLocationRef.current = newLoc;
+              if (status !== 'TERMINE TURNO') {
+                api.updateStatus(user.id, status, newLoc.lat, newLoc.lng);
+              }
+            }
           }
         },
         (err) => {
@@ -248,9 +266,6 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
               setGeoError("Error de GPS. Por favor, reintenta o usa el GPS de prueba.");
             }
             setLocation(null);
-            if (status !== 'TERMINE TURNO') {
-              api.updateStatus(user.id, status, undefined, undefined);
-            }
           }
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -283,6 +298,10 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
   useEffect(() => {
     if (status === 'TERMINE TURNO') return;
 
+    // Simulated GPS uses a faster interval (10s) to show live movement in the dashboard/map.
+    // Real GPS uses 4 minutes (240,000ms) to update status heartbeat if stationary.
+    const intervalTime = isGpsSimulated ? 10000 : 240000;
+
     const intervalId = setInterval(() => {
       if (isGpsSimulated) {
         setLocation(prev => {
@@ -293,12 +312,14 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
             const stepLng = (Math.random() - 0.5) * speed;
             const updated = { lat: prev.lat + stepLat, lng: prev.lng + stepLng };
             api.updateStatus(user.id, status, updated.lat, updated.lng);
+            lastSavedLocationRef.current = updated;
             return updated;
           } else {
             const centerLat = 4.6243 + (Math.random() - 0.5) * 0.08;
             const centerLng = -74.0636 + (Math.random() - 0.5) * 0.08;
             const updated = { lat: centerLat, lng: centerLng };
             api.updateStatus(user.id, status, updated.lat, updated.lng);
+            lastSavedLocationRef.current = updated;
             return updated;
           }
         });
@@ -312,6 +333,7 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
               const jitterLng = (Math.random() - 0.5) * 0.0001;
               const updated = { lat: newLoc.lat + jitterLat, lng: newLoc.lng + jitterLng };
               api.updateStatus(user.id, status, updated.lat, updated.lng);
+              lastSavedLocationRef.current = updated;
               return updated;
             });
           },
@@ -321,7 +343,7 @@ export default function DriverDashboard({ user }: DriverDashboardProps) {
           { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
         );
       }
-    }, 15000); // Trigger every 15 seconds to keep map coordinates continuously fresh
+    }, intervalTime);
 
     return () => clearInterval(intervalId);
   }, [status, user.id, isGpsSimulated, permissionState]);
