@@ -72,7 +72,31 @@ export default function CallCenterDashboard() {
 
   // State for logs, refresh feedback, and notifications
   const [driverLogs, setDriverLogs] = useState<any[]>([]);
+  const [filterDate, setFilterDate] = useState<string>(() => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  });
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const getLocalDateString = (dateObj: Date) => {
+    const yyyy = dateObj.getFullYear();
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const filteredDriverLogs = driverLogs.filter(log => {
+    if (!filterDate) return true;
+    try {
+      const logDate = getLocalDateString(new Date(log.changed_at));
+      return logDate === filterDate;
+    } catch (e) {
+      return false;
+    }
+  });
   const [notification, setNotification] = useState<{ message: string; type: "success" | "error"; show: boolean }>({
     message: "",
     type: "success",
@@ -475,7 +499,7 @@ export default function CallCenterDashboard() {
 
       {/* SECCIÓN DE TRAZA HORARIA Y CONTROL DE ESTADOS */}
       <section className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
           <div>
             <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900 uppercase tracking-tight">
               <Clock className="w-6 h-6 text-blue-600" /> Control de Estados y Tiempos de la Jornada
@@ -485,7 +509,27 @@ export default function CallCenterDashboard() {
             </p>
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Filtro por fecha */}
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-2xl p-2 px-3 shadow-sm">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Filtrar por Día:</span>
+              <input
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="bg-transparent border-none text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+              />
+              {filterDate && (
+                <button
+                  onClick={() => setFilterDate('')}
+                  className="text-xs font-black text-slate-400 hover:text-red-500 hover:scale-110 transition-all cursor-pointer ml-1 bg-slate-200/50 hover:bg-red-50 p-1 px-2 rounded-lg"
+                  title="Ver Todos los Días"
+                >
+                  VER TODO
+                </button>
+              )}
+            </div>
+
             <div className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-xl flex items-center gap-1.5 text-xs font-black uppercase tracking-wider border border-blue-100">
               <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" />
               Live Feed
@@ -495,10 +539,19 @@ export default function CallCenterDashboard() {
 
         {/* Resumen de Tiempos de Conexión por Conductor (Suma de Todos los Estados) */}
         <div className="mb-8 space-y-4">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Tiempos Totales Conectados por Conductor (Suma de Todos los Estados)</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              {filterDate ? `Tiempos de Conexión del Día ${new Date(filterDate + 'T12:00:00').toLocaleDateString([], { dateStyle: 'long' })}` : "Tiempos Totales Conectados por Conductor (Todos los Días)"}
+            </h3>
+            {filterDate && (
+              <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-150 px-2 py-0.5 rounded-lg font-bold">
+                Filtrado por Día
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {drivers.filter(d => d.role === 'driver').map(drv => {
-              const logs = driverLogs.filter(l => l.driver_id === drv.id);
+              const logs = filteredDriverLogs.filter(l => l.driver_id === drv.id);
               const totalSeconds = logs.reduce((sum, log) => sum + (log.duration_seconds || 0), 0);
               
               // Detailed breakdown
@@ -527,7 +580,7 @@ export default function CallCenterDashboard() {
 
                     <div className="space-y-2">
                       <div className="flex justify-between items-center bg-blue-50/70 p-2.5 rounded-xl border border-blue-100/50 mb-2">
-                        <span className="text-xs font-extrabold text-blue-900 uppercase">Tiempo Total Conectado:</span>
+                        <span className="text-xs font-extrabold text-blue-900 uppercase">Tiempo Conectado:</span>
                         <span className="font-black text-blue-800 text-sm font-mono">{formatDurationSeconds(totalSeconds)}</span>
                       </div>
 
@@ -559,11 +612,13 @@ export default function CallCenterDashboard() {
 
         {/* Resumen Visual por Conductor de su Traza de Hoy */}
         <div className="mb-8 space-y-4">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Línea de Tiempo de Actividad Reciente</h3>
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
+            {filterDate ? `Línea de Tiempo de Actividad del ${new Date(filterDate + 'T12:00:00').toLocaleDateString([], { dateStyle: 'long' })}` : "Línea de Tiempo de Actividad Completa"}
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {drivers.filter(d => d.role === 'driver').map(drv => {
               // Obtener logs de este conductor
-              const logsForDrv = driverLogs.filter(l => l.driver_id === drv.id).slice(0, 4);
+              const logsForDrv = filteredDriverLogs.filter(l => l.driver_id === drv.id).slice(0, 15);
               return (
                 <div key={drv.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-5 hover:border-blue-200 transition-all">
                   <div className="flex items-center justify-between mb-4 border-b border-slate-200/60 pb-3">
@@ -584,10 +639,10 @@ export default function CallCenterDashboard() {
                   {logsForDrv.length === 0 ? (
                     <div className="py-2 flex items-center gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-                      <p className="text-[10px] text-slate-450 uppercase font-black tracking-wide">Inició su turno hoy. Sin cambios registrados.</p>
+                      <p className="text-[10px] text-slate-450 uppercase font-black tracking-wide">Sin cambios registrados para este día.</p>
                     </div>
                   ) : (
-                    <div className="space-y-3 relative before:absolute before:left-2 before:top-2 before:bottom-2 before:w-[1px] before:bg-slate-200">
+                    <div className="space-y-3 relative before:absolute before:left-2 before:top-2 before:bottom-2 before:w-[1px] before:bg-slate-200 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
                       {logsForDrv.map((log, idx) => (
                         <div key={log.id || idx} className="flex items-start gap-4 pl-5 relative">
                           <span className={`absolute left-[5px] top-1.5 w-2 h-2 rounded-full border border-white shadow-sm ring-2 ${
