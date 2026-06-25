@@ -620,48 +620,6 @@ export default function CallCenterDashboard() {
             })}
           </div>
         </div>
-
-        {/* Tabla Detallada de Transiciones */}
-        <div className="overflow-x-auto rounded-2xl border border-slate-150">
-          <table className="w-full text-left border-collapse bg-slate-50/50">
-            <thead>
-              <tr className="bg-slate-100/55 border-b border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                <th className="p-4">Conductor</th>
-                <th className="p-4">Estado Anterior</th>
-                <th className="p-4">Nuevo Estado</th>
-                <th className="p-4">Fecha & Hora</th>
-                <th className="p-4 text-right">Duración en Estado</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
-              {driverLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="text-center py-10 text-slate-400 uppercase text-[10px] font-black tracking-wider">
-                    No hay registros de transiciones de estados todavía
-                  </td>
-                </tr>
-              ) : (
-                driverLogs.map((log) => {
-                  return (
-                    <tr key={log.id} className="hover:bg-slate-100/20 transition-all">
-                      <td className="p-4 font-bold text-slate-900">
-                        {drivers.find(d => d.id === log.driver_id)?.name || log.driver_name || `Conductor ${log.driver_id}`}
-                      </td>
-                      <td className="p-4 text-slate-400 uppercase text-[10px] tracking-wider">{log.previous_status || "INICIAL"}</td>
-                      <td className="p-4 text-blue-600 font-extrabold uppercase text-[10px] tracking-wider">{log.new_status}</td>
-                      <td className="p-4 text-slate-400 font-mono font-bold">
-                        {new Date(log.changed_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-                      </td>
-                      <td className="p-4 text-right font-mono font-black text-slate-800">
-                        {formatDurationSeconds(log.duration_seconds)}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
       </section>
 
       {/* Create Emergency Service Modal */}
