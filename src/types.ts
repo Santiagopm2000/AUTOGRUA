@@ -50,3 +50,19 @@ export interface Service {
   updated_at: string;
   duration_seconds?: number | null;
 }
+
+export interface DriverServiceHistory {
+  id: string | number;
+  driver_id: string;
+  driver_name?: string;
+  start_lat?: number;
+  start_lng?: number;
+  end_lat?: number;
+  end_lng?: number;
+  start_time: string;
+  end_time: string;
+  duration_seconds?: number | null;
+  start_zone?: string;
+  end_zone?: string;
+}
+

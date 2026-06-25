@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { User, Integration, Service, ServiceStatus } from "../types";
+import { User, Integration, Service, ServiceStatus, DriverServiceHistory } from "../types";
 import { api } from "../services/api";
 import { 
   Users, 
@@ -33,13 +33,19 @@ let DefaultIcon = L.icon({
 
 L.Marker.prototype.options.icon = DefaultIcon;
 
-// Helper component to center map on drivers (centers once on initial load to prevent interrupting manual exploration)
-function MapRecenter({ drivers }: { drivers: User[] }) {
+// Helper component to center map on drivers or selected history path
+function MapRecenter({ drivers, selectedHistory }: { drivers: User[]; selectedHistory?: DriverServiceHistory | null }) {
   const map = useMap();
   const hasCentered = useRef(false);
 
   useEffect(() => {
-    if (drivers.length > 0 && !hasCentered.current) {
+    if (selectedHistory && selectedHistory.start_lat && selectedHistory.start_lng && selectedHistory.end_lat && selectedHistory.end_lng) {
+      const bounds = L.latLngBounds([
+        [selectedHistory.start_lat, selectedHistory.start_lng],
+        [selectedHistory.end_lat, selectedHistory.end_lng]
+      ]);
+      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
+    } else if (drivers.length > 0 && !hasCentered.current) {
       // Filter out drivers with inactive GPS or ended shifts (TERMINE TURNO)
       const validDrivers = drivers.filter(d => d.last_lat && d.last_lng && d.status !== 'TERMINE TURNO');
       if (validDrivers.length > 0) {
@@ -48,18 +54,20 @@ function MapRecenter({ drivers }: { drivers: User[] }) {
         hasCentered.current = true;
       }
     }
-  }, [drivers, map]);
+  }, [drivers, map, selectedHistory]);
   return null;
 }
 
 export default function CallCenterDashboard() {
   const [drivers, setDrivers] = useState<User[]>([]);
+  const [servicesHistory, setServicesHistory] = useState<DriverServiceHistory[]>([]);
   const [activeRoutes, setActiveRoutes] = useState<Record<string, Array<[number, number]>>>({});
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | number | null>(null);
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [stats, setStats] = useState({ activeDrivers: 0, inService: 0 });
   const [loading, setLoading] = useState(true);
   const [services, setServices] = useState<Service[]>([]);
-  const [activeTab, setActiveTab] = useState<'drivers' | 'services'>('drivers');
+  const [activeTab, setActiveTab] = useState<'drivers' | 'services' | 'reports'>('drivers');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [savingService, setSavingService] = useState(false);
   const [newService, setNewService] = useState({
@@ -124,13 +132,14 @@ export default function CallCenterDashboard() {
 
   const fetchData = async () => {
     try {
-      const [driversData, statsData, integrationsData, servicesData, logsData, routesData] = await Promise.all([
+      const [driversData, statsData, integrationsData, servicesData, logsData, routesData, servicesHistoryData] = await Promise.all([
         api.getDrivers(),
         api.getAdminStats(),
         api.getIntegrations(),
         api.getServices(),
         api.getDriverStatusLogs(),
-        api.getActiveRoutes()
+        api.getActiveRoutes(),
+        api.getDriverServicesHistory()
       ]);
       setDrivers(driversData || []);
       setStats(statsData || { activeDrivers: 0, inService: 0 });
@@ -138,6 +147,7 @@ export default function CallCenterDashboard() {
       setServices(servicesData || []);
       setDriverLogs(logsData || []);
       setActiveRoutes(routesData || {});
+      setServicesHistory(servicesHistoryData || []);
     } catch (error) {
       console.error("Error fetching monitoring data:", error);
     } finally {
@@ -333,32 +343,37 @@ export default function CallCenterDashboard() {
             {/* Render active routes/polylines and start origin markers for drivers in EN SERVICIO */}
             {Array.isArray(drivers) && drivers.filter(d => d.status === 'EN SERVICIO').map((driver) => {
               const routePoints = activeRoutes[driver.id];
-              if (!routePoints || routePoints.length < 2) return null;
+              if (!routePoints || routePoints.length === 0) return null;
               
               const startPoint = routePoints[0];
+              const hasPolyline = routePoints.length >= 2;
               return (
                 <React.Fragment key={`route-${driver.id}`}>
                   {/* Uber-style dual polyline glow/path */}
-                  <Polyline 
-                    positions={routePoints} 
-                    pathOptions={{
-                      color: '#93c5fd', 
-                      weight: 8,
-                      opacity: 0.45,
-                      lineCap: 'round',
-                      lineJoin: 'round'
-                    }}
-                  />
-                  <Polyline 
-                    positions={routePoints} 
-                    pathOptions={{
-                      color: '#2563eb', // Vibrant blue
-                      weight: 4,
-                      opacity: 0.9,
-                      lineCap: 'round',
-                      lineJoin: 'round'
-                    }}
-                  />
+                  {hasPolyline && (
+                    <>
+                      <Polyline 
+                        positions={routePoints} 
+                        pathOptions={{
+                          color: '#93c5fd', 
+                          weight: 8,
+                          opacity: 0.45,
+                          lineCap: 'round',
+                          lineJoin: 'round'
+                        }}
+                      />
+                      <Polyline 
+                        positions={routePoints} 
+                        pathOptions={{
+                          color: '#2563eb', // Vibrant blue
+                          weight: 4,
+                          opacity: 0.9,
+                          lineCap: 'round',
+                          lineJoin: 'round'
+                        }}
+                      />
+                    </>
+                  )}
                   {/* Green Start Origin Pin */}
                   <Marker
                     position={startPoint}
@@ -388,6 +403,84 @@ export default function CallCenterDashboard() {
                 </React.Fragment>
               );
             })}
+
+            {/* Render selected completed/historical route trajectory and arrival pin */}
+            {(() => {
+              const selectedHistory = servicesHistory.find(h => h.id === selectedHistoryId);
+              if (!selectedHistory || !selectedHistory.start_lat || !selectedHistory.start_lng || !selectedHistory.end_lat || !selectedHistory.end_lng) return null;
+              
+              const startCoords: [number, number] = [selectedHistory.start_lat, selectedHistory.start_lng];
+              const endCoords: [number, number] = [selectedHistory.end_lat, selectedHistory.end_lng];
+
+              return (
+                <React.Fragment key={`history-route-${selectedHistory.id}`}>
+                  {/* Dashed trajectory line */}
+                  <Polyline 
+                    positions={[startCoords, endCoords]} 
+                    pathOptions={{
+                      color: '#f43f5e', // Rose
+                      weight: 4,
+                      opacity: 0.8,
+                      dashArray: '8, 8',
+                      lineCap: 'round',
+                      lineJoin: 'round'
+                    }}
+                  />
+                  {/* Green Start Origin Pin */}
+                  <Marker
+                    position={startCoords}
+                    icon={L.divIcon({
+                      className: 'custom-history-start',
+                      html: `
+                        <div class="relative">
+                          <div class="w-7 h-7 rounded-full border-4 border-emerald-500 bg-white flex items-center justify-center shadow-lg">
+                            <div class="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                          </div>
+                          <div class="absolute -bottom-5 left-1/2 -translate-x-1/2 bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-sm whitespace-nowrap">
+                            <span class="text-[7px] font-black uppercase tracking-tighter text-emerald-600 font-mono">HISTÓRICO: RECOGIDA</span>
+                          </div>
+                        </div>
+                      `,
+                      iconSize: [28, 28],
+                      iconAnchor: [14, 14]
+                    })}
+                  >
+                    <Popup>
+                      <div className="p-1">
+                        <p className="font-extrabold text-[10px] text-emerald-600 uppercase tracking-wider mb-0.5">Inicio de Trayecto</p>
+                        <p className="text-xs font-bold text-slate-700">Zona: {selectedHistory.start_zone || "General"}</p>
+                      </div>
+                    </Popup>
+                  </Marker>
+                  {/* Red/Checkered Arrival Pin */}
+                  <Marker
+                    position={endCoords}
+                    icon={L.divIcon({
+                      className: 'custom-history-end',
+                      html: `
+                        <div class="relative">
+                          <div class="w-7 h-7 rounded-full border-4 border-rose-500 bg-white flex items-center justify-center shadow-lg">
+                            <div class="w-2.5 h-2.5 bg-rose-500 rounded-full"></div>
+                          </div>
+                          <div class="absolute -bottom-5 left-1/2 -translate-x-1/2 bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-sm whitespace-nowrap">
+                            <span class="text-[7px] font-black uppercase tracking-tighter text-rose-600 font-mono">LLEGADA / COMPLETADO</span>
+                          </div>
+                        </div>
+                      `,
+                      iconSize: [28, 28],
+                      iconAnchor: [14, 14]
+                    })}
+                  >
+                    <Popup>
+                      <div className="p-1">
+                        <p className="font-extrabold text-[10px] text-rose-600 uppercase tracking-wider mb-0.5">Destino de Llegada</p>
+                        <p className="text-xs font-bold text-slate-700">Zona: {selectedHistory.end_zone || "General"}</p>
+                      </div>
+                    </Popup>
+                  </Marker>
+                </React.Fragment>
+              );
+            })()}
 
             {Array.isArray(drivers) && drivers.filter(d => d.last_lat && d.last_lng && d.status !== 'TERMINE TURNO').map((driver) => (
               <Marker 
@@ -423,7 +516,7 @@ export default function CallCenterDashboard() {
                 </Popup>
               </Marker>
             ))}
-            <MapRecenter drivers={drivers} />
+            <MapRecenter drivers={drivers} selectedHistory={servicesHistory.find(h => h.id === selectedHistoryId)} />
           </MapContainer>
         </div>
 
@@ -464,6 +557,16 @@ export default function CallCenterDashboard() {
                     {services.filter(s => s.status === 'PENDIENTE' || s.status === 'EN_CAMINO').length}
                   </span>
                 )}
+              </button>
+              <button
+                onClick={() => setActiveTab('reports')}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                  activeTab === 'reports' 
+                    ? 'bg-white text-slate-900 shadow-sm' 
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <Truck className="w-4 h-4" /> Rutas / Zonas
               </button>
             </div>
 
@@ -508,7 +611,7 @@ export default function CallCenterDashboard() {
                     ))
                   )}
                 </div>
-              ) : (
+              ) : activeTab === 'services' ? (
                 <div className="space-y-4">
                   {services.filter(s => s.status === 'PENDIENTE' || s.status === 'EN_CAMINO').length === 0 ? (
                     <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
@@ -553,6 +656,114 @@ export default function CallCenterDashboard() {
                       );
                     })
                   )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Resumen por Conductor */}
+                  <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl">
+                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-3">Servicios Completados por Conductor</p>
+                    <div className="space-y-3">
+                      {drivers.filter(d => d.role === 'driver').map(drv => {
+                        const historyForDrv = servicesHistory.filter(h => h.driver_id === drv.id);
+                        const totalServices = historyForDrv.length;
+
+                        // Calculate active zone
+                        const zoneCounts: Record<string, number> = {};
+                        historyForDrv.forEach(h => {
+                          const z = h.start_zone || "Zona General";
+                          zoneCounts[z] = (zoneCounts[z] || 0) + 1;
+                        });
+                        let activeZone = "Sin registros de GPS";
+                        let maxCount = 0;
+                        Object.entries(zoneCounts).forEach(([zone, count]) => {
+                          if (count > maxCount) {
+                            maxCount = count;
+                            activeZone = zone;
+                          }
+                        });
+
+                        return (
+                          <div key={drv.id} className="flex items-center justify-between border-b border-slate-200/55 pb-2.5 last:border-0 last:pb-0">
+                            <div>
+                              <p className="font-extrabold text-xs text-slate-800 leading-tight">{drv.name}</p>
+                              <p className="text-[9px] font-medium text-slate-400 mt-0.5">Zona más frecuente: <span className="font-bold text-slate-650">{activeZone}</span></p>
+                            </div>
+                            <div className="text-right">
+                              <span className="inline-block bg-blue-50 text-blue-600 border border-blue-100 text-[10px] font-black px-2.5 py-1 rounded-lg">
+                                {totalServices} {totalServices === 1 ? 'Servicio' : 'Servicios'}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Histórico detallado de trayectorias */}
+                  <div className="border-t border-slate-100 pt-2">
+                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-2">Historial de Rutas Completadas</p>
+                    {servicesHistory.length === 0 ? (
+                      <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                        <Truck className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                        <p className="text-xs font-bold">No hay rutas completadas registradas</p>
+                        <p className="text-[9px] text-slate-400 mt-1 uppercase tracking-wider">Se registran automáticamente cuando el conductor finaliza un servicio.</p>
+                      </div>
+                    ) : (
+                      servicesHistory.map((hist) => {
+                        const isSelected = selectedHistoryId === hist.id;
+                        return (
+                          <div 
+                            key={hist.id} 
+                            onClick={() => setSelectedHistoryId(isSelected ? null : hist.id)}
+                            className={`cursor-pointer rounded-2xl p-4 mb-3 transition-all border ${
+                              isSelected 
+                                ? "border-blue-600 bg-blue-50/20 shadow-md shadow-blue-500/5 ring-1 ring-blue-600" 
+                                : "bg-slate-50 border-slate-100 hover:border-blue-200"
+                            }`}
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <div>
+                                <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-md mr-1.5 uppercase ${
+                                  isSelected ? "bg-blue-600 text-white" : "text-blue-700 bg-blue-50 border border-blue-100"
+                                }`}>
+                                  {isSelected ? "Visualizando en Mapa" : "Ruta Completada"}
+                                </span>
+                                <span className="text-[10px] font-mono text-slate-400 font-bold">Ref: {String(hist.id).slice(-6).toUpperCase()}</span>
+                              </div>
+                              <span className="text-[10px] font-semibold text-slate-400 font-mono">
+                                {new Date(hist.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+
+                            <div className="text-xs space-y-1.5 text-slate-600 font-medium">
+                              <p><span className="text-slate-400 font-bold uppercase text-[9px] block">Conductor</span> {hist.driver_name || "Conductor"}</p>
+                              <div className="bg-white p-2.5 rounded-xl border border-slate-200/50 mt-1 space-y-1">
+                                <p className="flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                  <span className="text-[9px] text-slate-400 font-bold uppercase w-10">Origen:</span> 
+                                  <span className="text-slate-700 text-xs font-bold">{hist.start_zone}</span>
+                                </p>
+                                <p className="flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                  <span className="text-[9px] text-slate-400 font-bold uppercase w-10">Destino:</span> 
+                                  <span className="text-slate-700 text-xs font-bold">{hist.end_zone}</span>
+                                </p>
+                              </div>
+                              <p className="flex justify-between text-[10px] font-mono text-slate-400 pt-1 font-bold">
+                                <span>Duración del Trayecto:</span>
+                                <span className="text-slate-700 font-extrabold">{formatDurationSeconds(hist.duration_seconds)}</span>
+                              </p>
+                              {isSelected && (
+                                <p className="text-[8px] font-black uppercase text-blue-600 text-center mt-2 tracking-widest animate-pulse">
+                                  Haga clic de nuevo para ocultar ruta
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               )}
             </div>

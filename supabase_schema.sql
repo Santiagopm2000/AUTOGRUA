@@ -25,6 +25,7 @@ DROP TABLE IF EXISTS gps_logs CASCADE;
 DROP TABLE IF EXISTS services CASCADE;
 DROP TABLE IF EXISTS integrations CASCADE;
 DROP TABLE IF EXISTS driver_status_logs CASCADE;
+DROP TABLE IF EXISTS driver_services_history CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 
 -- 2. Creación de la Tabla de Usuarios (users)
@@ -92,12 +93,30 @@ CREATE TABLE driver_status_logs (
     duration_seconds INTEGER                         -- Duración en segundos transcurridos en el estado anterior
 );
 
--- 7. Creación de Índices para Consultas de Alto Rendimiento
+-- 7. Creación de la Tabla de Historial de Servicios/Trayectorias Completadas (driver_services_history)
+-- Registra el origen, destino, duración y zonas recorridas por el conductor durante sus trayectos.
+CREATE TABLE driver_services_history (
+    id TEXT PRIMARY KEY DEFAULT 'srv-hist-' || md5(random()::text),
+    driver_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    driver_name TEXT NOT NULL,
+    start_lat DOUBLE PRECISION,
+    start_lng DOUBLE PRECISION,
+    end_lat DOUBLE PRECISION,
+    end_lng DOUBLE PRECISION,
+    start_time TIMESTAMPTZ NOT NULL,
+    end_time TIMESTAMPTZ NOT NULL,
+    duration_seconds INTEGER,
+    start_zone TEXT,
+    end_zone TEXT
+);
+
+-- 8. Creación de Índices para Consultas de Alto Rendimiento
 CREATE INDEX idx_users_role_status ON users(role, status);
 CREATE INDEX idx_services_status ON services(status);
 CREATE INDEX idx_services_driver ON services(driver_id);
 CREATE INDEX idx_gps_logs_driver_time ON gps_logs(driver_id, recorded_at DESC);
 CREATE INDEX idx_driver_status_logs_driver ON driver_status_logs(driver_id, changed_at DESC);
+CREATE INDEX idx_driver_services_history_driver ON driver_services_history(driver_id, end_time DESC);
 
 
 -- ====================================================================
@@ -188,6 +207,7 @@ ALTER TABLE services DISABLE ROW LEVEL SECURITY;
 ALTER TABLE gps_logs DISABLE ROW LEVEL SECURITY;
 ALTER TABLE integrations DISABLE ROW LEVEL SECURITY;
 ALTER TABLE driver_status_logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE driver_services_history DISABLE ROW LEVEL SECURITY;
 
 -- Inserción de Cuentas Demostrativas Corporativas Iniciales (Seeding)
 INSERT INTO users (id, name, email, phone, mobile, area, role, status, last_lat, last_lng, last_update)

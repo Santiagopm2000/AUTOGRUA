@@ -1,5 +1,20 @@
-import { User, Integration, UserStatus, Service, ServiceStatus, DriverStatusLog } from "../types";
+import { User, Integration, UserStatus, Service, ServiceStatus, DriverStatusLog, DriverServiceHistory } from "../types";
 import { supabase } from "./supabase";
+
+export function getZoneName(lat?: number, lng?: number): string {
+  if (lat === undefined || lng === undefined || lat === null || lng === null) return "Zona Desconocida";
+  const isBogota = lat > 4.4 && lat < 4.9 && lng > -74.3 && lng < -73.9;
+  if (!isBogota) {
+    return `Zona GPS [${lat.toFixed(4)}, ${lng.toFixed(4)}]`;
+  }
+  if (lat > 4.72) return "Bogotá Norte (Usaquén / Suba)";
+  if (lat < 4.58) return "Bogotá Sur (Tunjuelito / Usme)";
+  if (lng < -74.13) return "Bogotá Occidente (Fontibón / Engativá)";
+  if (lng > -74.04) return "Bogotá Oriente (Chapinero / Santa Fe)";
+  if (lat >= 4.65 && lat <= 4.72) return "Bogotá Centro-Norte (Chapinero / Barrios Unidos)";
+  if (lat >= 4.58 && lat < 4.65) return "Bogotá Centro-Sur (Teusaquillo / Mártires)";
+  return "Bogotá Metropolitana";
+}
 
 const DEFAULT_DEMO_USERS: User[] = [
   { id: "user-px6", name: "Usuario Creador (Admin)", email: "px6.usa@gmail.com", phone: "+573100000000", mobile: "+573100000000", area: "Administración / Sistemas", role: "admin", status: "DISPONIBLE", status_start_time: new Date().toISOString(), last_update: new Date().toISOString() },
@@ -163,10 +178,34 @@ export const api = {
               }
             }
           }
+
+          // Also write to Supabase gps_logs table for cross-device visibility
+          try {
+            await supabase
+              .from("gps_logs")
+              .insert([{
+                driver_id: userId,
+                lat: lat,
+                lng: lng,
+                recorded_at: now
+              }]);
+          } catch (gpsErr) {
+            console.warn("Failed to write to gps_logs:", gpsErr);
+          }
         }
       } else if (status === 'DISPONIBLE' || status === 'TERMINE TURNO' || status === 'MANTENIMIENTO') {
         // Clear active route when driver becomes available, ends shift, or goes to maintenance
         delete routes[userId];
+        
+        // Also clear gps_logs from Supabase so the next service starts fresh
+        try {
+          await supabase
+            .from("gps_logs")
+            .delete()
+            .eq("driver_id", userId);
+        } catch (gpsDelErr) {
+          console.warn("Failed to delete gps_logs:", gpsDelErr);
+        }
       }
       localStorage.setItem("towassist_active_routes", JSON.stringify(routes));
     } catch (routeErr) {
@@ -182,13 +221,16 @@ export const api = {
       const rawLocal = localStorage.getItem("towassist_fallback_users");
       let localUsers: User[] = rawLocal ? JSON.parse(rawLocal) : [];
       let userIndex = localUsers.findIndex(u => u.id === userId);
+      let previousLocalUser: User | undefined = undefined;
       
       if (userIndex >= 0) {
+        previousLocalUser = { ...localUsers[userIndex] };
         localUsers[userIndex] = { ...localUsers[userIndex], ...updateData };
       } else {
         // Look up from central DEFAULT_DEMO_USERS to extend them with locations safely
         const foundDemo = DEFAULT_DEMO_USERS.find(u => u.id === userId);
         if (foundDemo) {
+          previousLocalUser = { ...foundDemo };
           localUsers.push({ ...foundDemo, ...updateData });
         } else {
           localUsers.push({ id: userId, name: "Conductor", email: "", role: "driver", ...updateData });
@@ -202,6 +244,82 @@ export const api = {
         const sessionUser = JSON.parse(rawSession);
         if (sessionUser.id === userId) {
           localStorage.setItem("towassist_user", JSON.stringify({ ...sessionUser, ...updateData }));
+        }
+      }
+
+      // Detect service completion (transitioning out of EN SERVICIO)
+      const prevStatusFinal = previousLocalUser?.status;
+      if (prevStatusFinal === 'EN SERVICIO' && status !== 'EN SERVICIO') {
+        try {
+          let start_lat = previousLocalUser?.last_lat;
+          let start_lng = previousLocalUser?.last_lng;
+          
+          // Try to retrieve the first point of the active route to get the true starting point
+          try {
+            const rawRoutes = localStorage.getItem("towassist_active_routes");
+            if (rawRoutes) {
+              const routes = JSON.parse(rawRoutes);
+              const driverRoute = routes[userId];
+              if (driverRoute && driverRoute.length > 0) {
+                start_lat = driverRoute[0][0];
+                start_lng = driverRoute[0][1];
+              }
+            }
+          } catch (routeErr) {}
+
+          const end_lat = lat !== undefined && lat !== null ? lat : previousLocalUser?.last_lat;
+          const end_lng = lng !== undefined && lng !== null ? lng : previousLocalUser?.last_lng;
+
+          const start_zone = getZoneName(start_lat, start_lng);
+          const end_zone = getZoneName(end_lat, end_lng);
+
+          const startTime = previousLocalUser?.status_start_time || now;
+          const endTime = now;
+          const durationSecs = Math.max(0, Math.floor((new Date(endTime).getTime() - new Date(startTime).getTime()) / 1000));
+
+          const historyRecord: DriverServiceHistory = {
+            id: `srv-hist-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            driver_id: userId,
+            driver_name: previousLocalUser?.name || "Conductor",
+            start_lat,
+            start_lng,
+            end_lat,
+            end_lng,
+            start_time: startTime,
+            end_time: endTime,
+            duration_seconds: durationSecs,
+            start_zone,
+            end_zone
+          };
+
+          // Write to Supabase table driver_services_history (if available)
+          try {
+            await supabase
+              .from("driver_services_history")
+              .insert([{
+                driver_id: historyRecord.driver_id,
+                driver_name: historyRecord.driver_name,
+                start_lat: historyRecord.start_lat,
+                start_lng: historyRecord.start_lng,
+                end_lat: historyRecord.end_lat,
+                end_lng: historyRecord.end_lng,
+                start_time: historyRecord.start_time,
+                end_time: historyRecord.end_time,
+                duration_seconds: historyRecord.duration_seconds,
+                start_zone: historyRecord.start_zone,
+                end_zone: historyRecord.end_zone
+              }]);
+          } catch (dbErr) {
+            console.warn("DB write to driver_services_history failed, saving to local fallback:", dbErr);
+          }
+
+          // Save locally to towassist_fallback_services_history
+          const rawHistory = localStorage.getItem("towassist_fallback_services_history");
+          const parsedHistory = rawHistory ? JSON.parse(rawHistory) : [];
+          const updatedHistory = [historyRecord, ...parsedHistory];
+          localStorage.setItem("towassist_fallback_services_history", JSON.stringify(updatedHistory.slice(0, 1000)));
+        } catch (logErr) {
+          console.warn("Error tracking completed service history:", logErr);
         }
       }
     } catch (localErr) {
@@ -818,10 +936,89 @@ export const api = {
 
   getActiveRoutes: async (): Promise<Record<string, Array<[number, number]>>> => {
     try {
-      const raw = localStorage.getItem("towassist_active_routes");
-      return raw ? JSON.parse(raw) : {};
+      // 1. Fetch current users that are active and in EN SERVICIO to narrow down
+      const { data: activeDrivers } = await supabase
+        .from("users")
+        .select("id")
+        .eq("status", "EN SERVICIO");
+
+      const activeIds = activeDrivers?.map(d => d.id) || [];
+      const routes: Record<string, Array<[number, number]>> = {};
+
+      if (activeIds.length > 0) {
+        // Fetch coordinates of those active drivers to build their routes
+        const { data: logs, error } = await supabase
+          .from("gps_logs")
+          .select("driver_id, lat, lng")
+          .in("driver_id", activeIds)
+          .order("recorded_at", { ascending: true });
+
+        if (!error && logs) {
+          logs.forEach(log => {
+            if (!routes[log.driver_id]) {
+              routes[log.driver_id] = [];
+            }
+            routes[log.driver_id].push([log.lat, log.lng]);
+          });
+        }
+      }
+
+      // 2. Fallback/merge with local storage routes for offline-first resilience
+      const rawLocal = localStorage.getItem("towassist_active_routes");
+      if (rawLocal) {
+        try {
+          const localRoutes = JSON.parse(rawLocal);
+          Object.keys(localRoutes).forEach(driverId => {
+            if (!routes[driverId] || routes[driverId].length < localRoutes[driverId].length) {
+              routes[driverId] = localRoutes[driverId];
+            }
+          });
+        } catch (err) {}
+      }
+
+      return routes;
     } catch (e) {
-      return {};
+      console.warn("Error querying gps_logs from Supabase:", e);
+      try {
+        const raw = localStorage.getItem("towassist_active_routes");
+        return raw ? JSON.parse(raw) : {};
+      } catch (inner) {
+        return {};
+      }
     }
+  },
+
+  getDriverServicesHistory: async (driverId?: string): Promise<DriverServiceHistory[]> => {
+    try {
+      let query = supabase
+        .from("driver_services_history")
+        .select("*")
+        .order("end_time", { ascending: false });
+
+      if (driverId) {
+        query = query.eq("driver_id", driverId);
+      }
+
+      const { data, error } = await query;
+      if (!error && Array.isArray(data)) {
+        return data as DriverServiceHistory[];
+      }
+    } catch (e) {
+      console.warn("Supabase driver services history query error, listing fallbacks:", e);
+    }
+
+    // Fallback
+    const localHist = localStorage.getItem("towassist_fallback_services_history");
+    let histList: DriverServiceHistory[] = [];
+    if (localHist) {
+      try {
+        histList = JSON.parse(localHist);
+      } catch (err) {}
+    }
+
+    if (driverId) {
+      return histList.filter(h => h.driver_id === driverId);
+    }
+    return histList;
   }
 };
