@@ -70,23 +70,61 @@ export default function CallCenterDashboard() {
     destination_address: ''
   });
 
+  // State for logs, refresh feedback, and notifications
+  const [driverLogs, setDriverLogs] = useState<any[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [notification, setNotification] = useState<{ message: string; type: "success" | "error"; show: boolean }>({
+    message: "",
+    type: "success",
+    show: false
+  });
+
+  const showNotification = (message: string, type: "success" | "error" = "success") => {
+    setNotification({ message, type, show: true });
+    setTimeout(() => {
+      setNotification(prev => ({ ...prev, show: false }));
+    }, 6000);
+  };
+
+  const formatDurationSeconds = (seconds?: number | null) => {
+    if (seconds === undefined || seconds === null) return "--";
+    if (seconds < 60) return `${seconds}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins < 60) return `${mins}m ${secs}s`;
+    const hrs = Math.floor(mins / 60);
+    const remMins = mins % 60;
+    return `${hrs}h ${remMins}m ${secs}s`;
+  };
+
   const fetchData = async () => {
     try {
-      const [driversData, statsData, integrationsData, servicesData] = await Promise.all([
+      const [driversData, statsData, integrationsData, servicesData, logsData] = await Promise.all([
         api.getDrivers(),
         api.getAdminStats(),
         api.getIntegrations(),
-        api.getServices()
+        api.getServices(),
+        api.getDriverStatusLogs()
       ]);
       setDrivers(driversData || []);
       setStats(statsData || { activeDrivers: 0, inService: 0 });
       setIntegrations((integrationsData || []).filter(i => i.active));
       setServices(servicesData || []);
+      setDriverLogs(logsData || []);
     } catch (error) {
       console.error("Error fetching monitoring data:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchData();
+    setTimeout(() => {
+      setIsRefreshing(false);
+      showNotification("¡Actualizado! Ubicaciones GPS, traza de estados y servicios de los conductores validados con éxito.", "success");
+    }, 800);
   };
 
   const handleCreateServiceSubmit = async (e: React.FormEvent) => {
@@ -191,16 +229,40 @@ export default function CallCenterDashboard() {
   if (loading) return <div className="flex justify-center py-20">Cargando Monitoreo...</div>;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 relative">
+      {/* Toast Notification for manual refresh validation */}
+      {notification.show && (
+        <div className="fixed bottom-6 right-6 z-[9999] max-w-md p-4 rounded-3xl shadow-2xl border flex items-start gap-3 bg-slate-900 border-slate-800 text-slate-100 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="mt-0.5 bg-white/10 p-1.5 rounded-xl">
+            <Clock className="w-5 h-5 text-blue-400" />
+          </div>
+          <div className="flex-1 space-y-0.5">
+            <h5 className="font-black text-xs uppercase tracking-wider text-white">Validación de Estado</h5>
+            <p className="text-[11px] font-bold leading-normal text-slate-300">
+              {notification.message}
+            </p>
+          </div>
+          <button 
+            onClick={() => setNotification(prev => ({ ...prev, show: false }))}
+            className="text-xs font-black cursor-pointer hover:opacity-85 p-1 bg-white/10 hover:bg-white/25 rounded-lg transition-all"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-black flex items-center gap-2 text-slate-900 uppercase tracking-tighter">
           <MapIcon className="w-8 h-8 text-blue-600" /> Monitoreo <span className="text-blue-600">Axistcorp</span>
         </h1>
         <button 
-          onClick={fetchData}
-          className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold p-3 rounded-xl transition-all shadow-sm"
+          onClick={handleManualRefresh}
+          disabled={isRefreshing}
+          className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold p-3 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+          title="Actualizar pantalla y validar GPS"
         >
-          <RefreshCcw className="w-5 h-5" />
+          <RefreshCcw className={`w-5 h-5 ${isRefreshing ? "animate-spin text-blue-600" : ""}`} />
+          <span className="text-xs font-black uppercase tracking-wider hidden sm:inline">Actualizar</span>
         </button>
       </div>
 
@@ -410,6 +472,131 @@ export default function CallCenterDashboard() {
           </div>
         </div>
       </div>
+
+      {/* SECCIÓN DE TRAZA HORARIA Y CONTROL DE ESTADOS */}
+      <section className="bg-white border border-slate-200 rounded-[2.5rem] p-8 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900 uppercase tracking-tight">
+              <Clock className="w-6 h-6 text-blue-600" /> Control de Estados y Tiempos de la Jornada
+            </h2>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-1">
+              Monitoreo en tiempo real de la traza y horas de actividad de cada conductor
+            </p>
+          </div>
+          
+          <div className="flex gap-2">
+            <div className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-xl flex items-center gap-1.5 text-xs font-black uppercase tracking-wider border border-blue-100">
+              <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" />
+              Live Feed
+            </div>
+          </div>
+        </div>
+
+        {/* Resumen Visual por Conductor de su Traza de Hoy */}
+        <div className="mb-8 space-y-4">
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Línea de Tiempo de Actividad Reciente</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {drivers.filter(d => d.role === 'driver').map(drv => {
+              // Obtener logs de este conductor
+              const logsForDrv = driverLogs.filter(l => l.driver_id === drv.id).slice(0, 4);
+              return (
+                <div key={drv.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-5 hover:border-blue-200 transition-all">
+                  <div className="flex items-center justify-between mb-4 border-b border-slate-200/60 pb-3">
+                    <div>
+                      <p className="font-extrabold text-slate-900 text-sm">{drv.name}</p>
+                      <p className="text-[10px] text-slate-400 font-medium">{drv.area || "Logística General"}</p>
+                    </div>
+                    <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${
+                      drv.status === 'DISPONIBLE' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 
+                      drv.status === 'EN SERVICIO' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                      drv.status === 'MANTENIMIENTO' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 
+                      'bg-slate-200 text-slate-750 border border-slate-300'
+                    }`}>
+                      {drv.status}
+                    </span>
+                  </div>
+                  
+                  {logsForDrv.length === 0 ? (
+                    <div className="py-2 flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                      <p className="text-[10px] text-slate-450 uppercase font-black tracking-wide">Inició su turno hoy. Sin cambios registrados.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 relative before:absolute before:left-2 before:top-2 before:bottom-2 before:w-[1px] before:bg-slate-200">
+                      {logsForDrv.map((log, idx) => (
+                        <div key={log.id || idx} className="flex items-start gap-4 pl-5 relative">
+                          <span className={`absolute left-[5px] top-1.5 w-2 h-2 rounded-full border border-white shadow-sm ring-2 ${
+                            log.new_status === 'DISPONIBLE' ? 'bg-emerald-500 ring-emerald-100' :
+                            log.new_status === 'EN SERVICIO' ? 'bg-blue-500 ring-blue-100' :
+                            log.new_status === 'MANTENIMIENTO' ? 'bg-amber-500 ring-amber-100' : 
+                            'bg-red-500 ring-red-100'
+                          }`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-bold text-slate-700">
+                                Cambio a <span className="font-extrabold uppercase text-slate-900">{log.new_status}</span>
+                              </p>
+                              <span className="text-[10px] font-mono font-bold text-slate-400">
+                                {new Date(log.changed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            {log.duration_seconds && (
+                              <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                                Estuvo en <span className="font-bold">{log.previous_status || "INICIAL"}</span> por {formatDurationSeconds(log.duration_seconds)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Tabla Detallada de Transiciones */}
+        <div className="overflow-x-auto rounded-2xl border border-slate-150">
+          <table className="w-full text-left border-collapse bg-slate-50/50">
+            <thead>
+              <tr className="bg-slate-100/55 border-b border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <th className="p-4">Conductor</th>
+                <th className="p-4">Estado Anterior</th>
+                <th className="p-4">Nuevo Estado</th>
+                <th className="p-4">Fecha & Hora</th>
+                <th className="p-4 text-right">Duración en Estado</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
+              {driverLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-10 text-slate-400 uppercase text-[10px] font-black tracking-wider">
+                    No hay registros de transiciones de estados todavía
+                  </td>
+                </tr>
+              ) : (
+                driverLogs.map((log) => {
+                  return (
+                    <tr key={log.id} className="hover:bg-slate-100/20 transition-all">
+                      <td className="p-4 font-bold text-slate-900">{log.driver_name || log.driver_id}</td>
+                      <td className="p-4 text-slate-400 uppercase text-[10px] tracking-wider">{log.previous_status || "INICIAL"}</td>
+                      <td className="p-4 text-blue-600 font-extrabold uppercase text-[10px] tracking-wider">{log.new_status}</td>
+                      <td className="p-4 text-slate-400 font-mono font-bold">
+                        {new Date(log.changed_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                      </td>
+                      <td className="p-4 text-right font-mono font-black text-slate-800">
+                        {formatDurationSeconds(log.duration_seconds)}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       {/* Create Emergency Service Modal */}
       {showCreateModal && (

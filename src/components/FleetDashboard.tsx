@@ -10,7 +10,8 @@ import {
   Wrench,
   Moon,
   MessageCircle,
-  Phone
+  Phone,
+  RefreshCcw
 } from "lucide-react";
 import { motion } from "motion/react";
 
@@ -18,6 +19,7 @@ export default function FleetDashboard() {
   const [drivers, setDrivers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDriver, setSelectedDriver] = useState<User | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -28,6 +30,14 @@ export default function FleetDashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchData();
+    setTimeout(() => {
+      setIsRefreshing(false);
+    }, 800);
   };
 
   useEffect(() => {
@@ -79,7 +89,17 @@ export default function FleetDashboard() {
           <h1 className="text-3xl font-black tracking-tighter uppercase text-slate-900">Flota <span className="text-blue-600">Axistcorp</span></h1>
           <p className="text-slate-500 text-sm font-medium">Estado en tiempo real de todos los conductores</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold px-4 py-2 rounded-xl transition-all shadow-sm flex items-center gap-2 active:scale-95 disabled:opacity-50 text-xs"
+            title="Actualizar datos de flota"
+          >
+            <RefreshCcw className={`w-4 h-4 ${isRefreshing ? "animate-spin text-blue-600" : ""}`} />
+            <span className="font-black uppercase tracking-wider">Actualizar</span>
+          </button>
+
           <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl flex items-center gap-2 shadow-sm">
             <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Live Sync</span>
