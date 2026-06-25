@@ -493,6 +493,70 @@ export default function CallCenterDashboard() {
           </div>
         </div>
 
+        {/* Resumen de Tiempos de Conexión por Conductor (Suma de Todos los Estados) */}
+        <div className="mb-8 space-y-4">
+          <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Tiempos Totales Conectados por Conductor (Suma de Todos los Estados)</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {drivers.filter(d => d.role === 'driver').map(drv => {
+              const logs = driverLogs.filter(l => l.driver_id === drv.id);
+              const totalSeconds = logs.reduce((sum, log) => sum + (log.duration_seconds || 0), 0);
+              
+              // Detailed breakdown
+              const disponibleSecs = logs.filter(l => l.new_status === 'DISPONIBLE').reduce((sum, l) => sum + (l.duration_seconds || 0), 0);
+              const enServicioSecs = logs.filter(l => l.new_status === 'EN SERVICIO').reduce((sum, l) => sum + (l.duration_seconds || 0), 0);
+              const mantenimientoSecs = logs.filter(l => l.new_status === 'MANTENIMIENTO').reduce((sum, l) => sum + (l.duration_seconds || 0), 0);
+              const termineTurnoSecs = logs.filter(l => l.new_status === 'TERMINE TURNO').reduce((sum, l) => sum + (l.duration_seconds || 0), 0);
+
+              return (
+                <div key={drv.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-5 hover:border-blue-200 transition-all flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-3 border-b border-slate-200/60 pb-3">
+                      <div>
+                        <p className="font-extrabold text-slate-900 text-sm">{drv.name}</p>
+                        <p className="text-[10px] text-slate-450 font-black uppercase mt-0.5">ID: {drv.id}</p>
+                      </div>
+                      <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full ${
+                        drv.status === 'DISPONIBLE' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 
+                        drv.status === 'EN SERVICIO' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                        drv.status === 'MANTENIMIENTO' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 
+                        'bg-slate-200 text-slate-750 border border-slate-300'
+                      }`}>
+                        {drv.status}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center bg-blue-50/70 p-2.5 rounded-xl border border-blue-100/50 mb-2">
+                        <span className="text-xs font-extrabold text-blue-900 uppercase">Tiempo Total Conectado:</span>
+                        <span className="font-black text-blue-800 text-sm font-mono">{formatDurationSeconds(totalSeconds)}</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500 font-semibold">
+                        <div className="bg-white p-2 rounded-xl border border-slate-200/50">
+                          <span className="block text-slate-400 text-[8px] font-black uppercase tracking-wider">Disponible</span>
+                          <span className="font-black text-slate-700 font-mono text-[11px]">{formatDurationSeconds(disponibleSecs)}</span>
+                        </div>
+                        <div className="bg-white p-2 rounded-xl border border-slate-200/50">
+                          <span className="block text-slate-400 text-[8px] font-black uppercase tracking-wider">En Servicio</span>
+                          <span className="font-black text-slate-700 font-mono text-[11px]">{formatDurationSeconds(enServicioSecs)}</span>
+                        </div>
+                        <div className="bg-white p-2 rounded-xl border border-slate-200/50">
+                          <span className="block text-slate-400 text-[8px] font-black uppercase tracking-wider">Mantenimiento</span>
+                          <span className="font-black text-slate-700 font-mono text-[11px]">{formatDurationSeconds(mantenimientoSecs)}</span>
+                        </div>
+                        <div className="bg-white p-2 rounded-xl border border-slate-200/50">
+                          <span className="block text-slate-400 text-[8px] font-black uppercase tracking-wider">Fuera Turno</span>
+                          <span className="font-black text-slate-700 font-mono text-[11px]">{formatDurationSeconds(termineTurnoSecs)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Resumen Visual por Conductor de su Traza de Hoy */}
         <div className="mb-8 space-y-4">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Línea de Tiempo de Actividad Reciente</h3>
@@ -580,7 +644,9 @@ export default function CallCenterDashboard() {
                 driverLogs.map((log) => {
                   return (
                     <tr key={log.id} className="hover:bg-slate-100/20 transition-all">
-                      <td className="p-4 font-bold text-slate-900">{log.driver_name || log.driver_id}</td>
+                      <td className="p-4 font-bold text-slate-900">
+                        {drivers.find(d => d.id === log.driver_id)?.name || log.driver_name || `Conductor ${log.driver_id}`}
+                      </td>
                       <td className="p-4 text-slate-400 uppercase text-[10px] tracking-wider">{log.previous_status || "INICIAL"}</td>
                       <td className="p-4 text-blue-600 font-extrabold uppercase text-[10px] tracking-wider">{log.new_status}</td>
                       <td className="p-4 text-slate-400 font-mono font-bold">
